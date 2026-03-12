@@ -1,0 +1,1395 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
+mod calculations;
+mod models;
+mod reports;
+mod storage;
+mod theme;
+mod ui;
+
+use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
+use image::imageops::FilterType;
+use models::{
+    AppData, ArenaEntry, ArenaForm, DofusClass, DungeonEntry, DungeonForm, DuoTrioEntry,
+    DuoTrioForm, DurationInput, Tab, ZoneEntry, ZoneForm,
+};
+use reports::{ReportCategoryFilter, ReportPeriod};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+pub const APP_NAME: &str = "EvoFarm";
+const APP_ICON_BYTES: &[u8] = include_bytes!("../icone/icone.png");
+const APP_ICON_SIZE: u32 = 256;
+const CLASS_CRA_BYTES: &[u8] = include_bytes!("../classes/cra.png");
+const CLASS_ECAFLIP_BYTES: &[u8] = include_bytes!("../classes/ecaflip.png");
+const CLASS_ENIRIPSA_BYTES: &[u8] = include_bytes!("../classes/eniripsa.png");
+const CLASS_ENUTROF_BYTES: &[u8] = include_bytes!("../classes/enutrof.png");
+const CLASS_FECA_BYTES: &[u8] = include_bytes!("../classes/feca.png");
+const CLASS_IOP_BYTES: &[u8] = include_bytes!("../classes/iop.png");
+const CLASS_OSAMODAS_BYTES: &[u8] = include_bytes!("../classes/osamodas.png");
+const CLASS_PANDAWA_BYTES: &[u8] = include_bytes!("../classes/pandawa.png");
+const CLASS_SACRIEUR_BYTES: &[u8] = include_bytes!("../classes/sacrieur.png");
+const CLASS_SADIDA_BYTES: &[u8] = include_bytes!("../classes/sadida.png");
+const CLASS_SRAM_BYTES: &[u8] = include_bytes!("../classes/sram.png");
+const CLASS_XELOR_BYTES: &[u8] = include_bytes!("../classes/xelor.png");
+
+fn main() -> Result<(), eframe::Error> {
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_inner_size([1180.0, 820.0])
+        .with_min_inner_size([920.0, 680.0])
+        .with_title(APP_NAME);
+
+    if let Ok(icon) = load_app_icon_data() {
+        viewport = viewport.with_icon(icon);
+    }
+
+    let options = eframe::NativeOptions {
+        viewport,
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        APP_NAME,
+        options,
+        Box::new(|cc| {
+            theme::apply_theme(&cc.egui_ctx);
+            let mut app = MyApp::load();
+            app.load_visual_assets(&cc.egui_ctx);
+            Box::new(app)
+        }),
+    )
+}
+
+#[derive(Clone, Copy)]
+pub enum StatusKind {
+    Success,
+    Error,
+    Info,
+}
+
+pub struct StatusBanner {
+    pub kind: StatusKind,
+    pub message: String,
+}
+
+pub struct InlineEditState<T> {
+    pub index: usize,
+    pub form: T,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LoadAction {
+    ReloadLocal,
+    ImportExternal(PathBuf),
+}
+
+pub struct MyApp {
+    pub data: AppData,
+    pub current_tab: Tab,
+    pub zone_form: ZoneForm,
+    pub dungeon_form: DungeonForm,
+    pub duo_trio_form: DuoTrioForm,
+    pub arena_form: ArenaForm,
+    pub status: Option<StatusBanner>,
+    pub background_texture: Option<TextureHandle>,
+    pub app_icon_texture: Option<TextureHandle>,
+    pub class_textures: HashMap<DofusClass, TextureHandle>,
+    pub zone_form_error: Option<String>,
+    pub dungeon_form_error: Option<String>,
+    pub duo_trio_form_error: Option<String>,
+    pub arena_form_error: Option<String>,
+    pub report_period: ReportPeriod,
+    pub report_categories: ReportCategoryFilter,
+    pub report_bar_mode: bool,
+    pub activity_search_class: Option<DofusClass>,
+    pub activity_search_time: DurationInput,
+    pub activity_search_time_touched: bool,
+    pub activity_search_time_error: Option<String>,
+    pub zone_search: String,
+    pub dungeon_search: String,
+    pub duo_trio_search: String,
+    pub arena_search: String,
+    pub zone_edit: Option<InlineEditState<ZoneForm>>,
+    pub dungeon_edit: Option<InlineEditState<DungeonForm>>,
+    pub duo_trio_edit: Option<InlineEditState<DuoTrioForm>>,
+    pub arena_edit: Option<InlineEditState<ArenaForm>>,
+    pub zone_delete_confirm: Option<usize>,
+    pub dungeon_delete_confirm: Option<usize>,
+    pub duo_trio_delete_confirm: Option<usize>,
+    pub arena_delete_confirm: Option<usize>,
+    pub show_clear_all_confirm: bool,
+    pub show_load_dialog: bool,
+    pub show_load_confirm: bool,
+    pub pending_load_action: Option<LoadAction>,
+}
+
+impl Default for MyApp {
+    fn default() -> Self {
+        Self {
+            data: AppData::default(),
+            current_tab: Tab::Zones,
+            zone_form: ZoneForm::default(),
+            dungeon_form: DungeonForm::default(),
+            duo_trio_form: DuoTrioForm::default(),
+            arena_form: ArenaForm::default(),
+            status: None,
+            background_texture: None,
+            app_icon_texture: None,
+            class_textures: HashMap::new(),
+            zone_form_error: None,
+            dungeon_form_error: None,
+            duo_trio_form_error: None,
+            arena_form_error: None,
+            report_period: ReportPeriod::AllTime,
+            report_categories: ReportCategoryFilter::default(),
+            report_bar_mode: false,
+            activity_search_class: None,
+            activity_search_time: DurationInput::default(),
+            activity_search_time_touched: false,
+            activity_search_time_error: None,
+            zone_search: String::new(),
+            dungeon_search: String::new(),
+            duo_trio_search: String::new(),
+            arena_search: String::new(),
+            zone_edit: None,
+            dungeon_edit: None,
+            duo_trio_edit: None,
+            arena_edit: None,
+            zone_delete_confirm: None,
+            dungeon_delete_confirm: None,
+            duo_trio_delete_confirm: None,
+            arena_delete_confirm: None,
+            show_clear_all_confirm: false,
+            show_load_dialog: false,
+            show_load_confirm: false,
+            pending_load_action: None,
+        }
+    }
+}
+
+impl MyApp {
+    pub fn load() -> Self {
+        let mut app = Self::default();
+        let path = storage::data_file_path();
+
+        if !path.exists() {
+            return app;
+        }
+
+        match storage::load_data() {
+            Ok(result) => {
+                app.data = result.data;
+
+                if result.cleaned_legacy_entries > 0 {
+                    app.set_status(
+                        StatusKind::Info,
+                        format!(
+                            "{} ancienne(s) entree(s) legacy ont ete ignorees au chargement. La sauvegarde locale n'a pas ete reecrite automatiquement. Verifie les donnees affichees puis sauvegarde manuellement si tu veux ecrire une version nettoyee.",
+                            result.cleaned_legacy_entries
+                        ),
+                    );
+                }
+            }
+            Err(error) => {
+                app.set_status(
+                    StatusKind::Error,
+                    format!("Impossible de charger les données enregistrées : {error}"),
+                );
+            }
+        }
+
+        app
+    }
+
+    pub fn load_visual_assets(&mut self, ctx: &egui::Context) {
+        if self.background_texture.is_none() {
+            if let Ok(texture) = load_background_texture(ctx) {
+                self.background_texture = Some(texture);
+            }
+        }
+
+        if self.app_icon_texture.is_none() {
+            if let Ok(texture) = load_app_icon_texture(ctx) {
+                self.app_icon_texture = Some(texture);
+            }
+        }
+
+        if self.class_textures.is_empty() {
+            self.class_textures = load_class_textures(ctx);
+        }
+    }
+
+    pub fn save(&mut self) {
+        self.persist_with_status("Données sauvegardées.");
+    }
+
+    pub fn open_load_dialog(&mut self) {
+        self.show_load_dialog = true;
+    }
+
+    pub fn close_load_dialog(&mut self) {
+        self.show_load_dialog = false;
+    }
+
+    pub fn request_reload_local(&mut self) {
+        self.pending_load_action = Some(LoadAction::ReloadLocal);
+        self.show_load_dialog = false;
+        self.show_load_confirm = true;
+    }
+
+    pub fn request_import_external(&mut self, path: PathBuf) {
+        self.pending_load_action = Some(LoadAction::ImportExternal(path));
+        self.show_load_dialog = false;
+        self.show_load_confirm = true;
+    }
+
+    pub fn cancel_load_confirmation(&mut self) {
+        self.show_load_confirm = false;
+        self.pending_load_action = None;
+    }
+
+    pub fn pending_load_confirmation(&self) -> Option<(String, String, String)> {
+        match self.pending_load_action.as_ref()? {
+            LoadAction::ReloadLocal => Some((
+                "Recharger la sauvegarde locale".to_string(),
+                format!(
+                    "Cette action remplace les données actuellement affichées par la sauvegarde locale située ici : {}",
+                    storage::data_file_path().display()
+                ),
+                "Charger".to_string(),
+            )),
+            LoadAction::ImportExternal(path) => Some((
+                "Importer un fichier JSON".to_string(),
+                format!(
+                    "Cette action remplace les données actuellement affichées avec le contenu de {} puis met à jour la sauvegarde locale de l'application.",
+                    path.display()
+                ),
+                "Importer".to_string(),
+            )),
+        }
+    }
+
+    pub fn confirm_pending_load(&mut self) {
+        self.show_load_confirm = false;
+
+        if let Some(action) = self.pending_load_action.take() {
+            self.load_from_action(action);
+        }
+    }
+
+    pub fn submit_zone_form(&mut self) {
+        match build_zone_entry(&self.zone_form) {
+            Ok(entry) => {
+                push_and_sort_by(&mut self.data.zones, entry, |zone| zone.kamas_per_hour);
+                self.zone_form = ZoneForm::default();
+                self.zone_form_error = None;
+                self.clear_zone_transient_state();
+                self.persist_with_status("Zone ajoutée.");
+            }
+            Err(error) => self.zone_form_error = Some(error),
+        }
+    }
+
+    pub fn submit_dungeon_form(&mut self) {
+        match build_dungeon_entry(&self.dungeon_form) {
+            Ok(entry) => {
+                push_and_sort_by(&mut self.data.dungeons, entry, |dungeon| {
+                    dungeon.kamas_per_hour
+                });
+                self.dungeon_form = DungeonForm::default();
+                self.dungeon_form_error = None;
+                self.clear_dungeon_transient_state();
+                self.persist_with_status("Donjon ajouté.");
+            }
+            Err(error) => self.dungeon_form_error = Some(error),
+        }
+    }
+
+    pub fn submit_duo_trio_form(&mut self) {
+        match build_duo_trio_entry(&self.duo_trio_form) {
+            Ok(entry) => {
+                push_and_sort_by(&mut self.data.duo_trios, entry, |run| run.kamas_per_hour);
+                self.duo_trio_form = DuoTrioForm::default();
+                self.duo_trio_form_error = None;
+                self.clear_duo_trio_transient_state();
+                self.persist_with_status("Run duo/trio ajoute.");
+            }
+            Err(error) => self.duo_trio_form_error = Some(error),
+        }
+    }
+
+    pub fn submit_arena_form(&mut self) {
+        match build_arena_entry(&self.arena_form) {
+            Ok(entry) => {
+                push_and_sort_by(&mut self.data.arenas, entry, |arena| arena.kamas_per_hour);
+                self.arena_form = ArenaForm::default();
+                self.arena_form_error = None;
+                self.clear_arena_transient_state();
+                self.persist_with_status("PL arène ajouté.");
+            }
+            Err(error) => self.arena_form_error = Some(error),
+        }
+    }
+
+    pub fn start_zone_edit(&mut self, index: usize) {
+        if let Some(entry) = self.data.zones.get(index) {
+            self.zone_edit = Some(InlineEditState {
+                index,
+                form: zone_form_from_entry(entry),
+                error: None,
+            });
+            self.zone_delete_confirm = None;
+        }
+    }
+
+    pub fn start_dungeon_edit(&mut self, index: usize) {
+        if let Some(entry) = self.data.dungeons.get(index) {
+            self.dungeon_edit = Some(InlineEditState {
+                index,
+                form: dungeon_form_from_entry(entry),
+                error: None,
+            });
+            self.dungeon_delete_confirm = None;
+        }
+    }
+
+    pub fn start_duo_trio_edit(&mut self, index: usize) {
+        if let Some(entry) = self.data.duo_trios.get(index) {
+            self.duo_trio_edit = Some(InlineEditState {
+                index,
+                form: duo_trio_form_from_entry(entry),
+                error: None,
+            });
+            self.duo_trio_delete_confirm = None;
+        }
+    }
+
+    pub fn start_arena_edit(&mut self, index: usize) {
+        if let Some(entry) = self.data.arenas.get(index) {
+            self.arena_edit = Some(InlineEditState {
+                index,
+                form: arena_form_from_entry(entry),
+                error: None,
+            });
+            self.arena_delete_confirm = None;
+        }
+    }
+
+    pub fn save_zone_edit(&mut self) {
+        let Some(edit) = self.zone_edit.as_ref() else {
+            return;
+        };
+
+        let index = edit.index;
+        let form = edit.form.clone();
+
+        match build_zone_entry(&form) {
+            Ok(entry) => {
+                replace_and_sort_by(&mut self.data.zones, index, entry, |zone| {
+                    zone.kamas_per_hour
+                });
+                self.clear_zone_transient_state();
+                self.persist_with_status("Zone mise à jour.");
+            }
+            Err(error) => {
+                if let Some(edit) = self.zone_edit.as_mut() {
+                    edit.error = Some(error);
+                }
+            }
+        }
+    }
+
+    pub fn save_dungeon_edit(&mut self) {
+        let Some(edit) = self.dungeon_edit.as_ref() else {
+            return;
+        };
+
+        let index = edit.index;
+        let form = edit.form.clone();
+
+        match build_dungeon_entry(&form) {
+            Ok(entry) => {
+                replace_and_sort_by(&mut self.data.dungeons, index, entry, |dungeon| {
+                    dungeon.kamas_per_hour
+                });
+                self.clear_dungeon_transient_state();
+                self.persist_with_status("Donjon mis à jour.");
+            }
+            Err(error) => {
+                if let Some(edit) = self.dungeon_edit.as_mut() {
+                    edit.error = Some(error);
+                }
+            }
+        }
+    }
+
+    pub fn save_duo_trio_edit(&mut self) {
+        let Some(edit) = self.duo_trio_edit.as_ref() else {
+            return;
+        };
+
+        let index = edit.index;
+        let form = edit.form.clone();
+
+        match build_duo_trio_entry(&form) {
+            Ok(entry) => {
+                replace_and_sort_by(&mut self.data.duo_trios, index, entry, |run| {
+                    run.kamas_per_hour
+                });
+                self.clear_duo_trio_transient_state();
+                self.persist_with_status("Run duo/trio mis a jour.");
+            }
+            Err(error) => {
+                if let Some(edit) = self.duo_trio_edit.as_mut() {
+                    edit.error = Some(error);
+                }
+            }
+        }
+    }
+
+    pub fn save_arena_edit(&mut self) {
+        let Some(edit) = self.arena_edit.as_ref() else {
+            return;
+        };
+
+        let index = edit.index;
+        let form = edit.form.clone();
+
+        match build_arena_entry(&form) {
+            Ok(entry) => {
+                replace_and_sort_by(&mut self.data.arenas, index, entry, |arena| {
+                    arena.kamas_per_hour
+                });
+                self.clear_arena_transient_state();
+                self.persist_with_status("PL arène mis à jour.");
+            }
+            Err(error) => {
+                if let Some(edit) = self.arena_edit.as_mut() {
+                    edit.error = Some(error);
+                }
+            }
+        }
+    }
+
+    pub fn cancel_zone_edit(&mut self) {
+        self.zone_edit = None;
+    }
+
+    pub fn cancel_dungeon_edit(&mut self) {
+        self.dungeon_edit = None;
+    }
+
+    pub fn cancel_duo_trio_edit(&mut self) {
+        self.duo_trio_edit = None;
+    }
+
+    pub fn cancel_arena_edit(&mut self) {
+        self.arena_edit = None;
+    }
+
+    pub fn confirm_zone_delete(&mut self, index: usize) {
+        if index < self.data.zones.len() {
+            self.data.zones.remove(index);
+            self.clear_zone_transient_state();
+            self.persist_with_status("Zone supprimée.");
+        }
+    }
+
+    pub fn confirm_dungeon_delete(&mut self, index: usize) {
+        if index < self.data.dungeons.len() {
+            self.data.dungeons.remove(index);
+            self.clear_dungeon_transient_state();
+            self.persist_with_status("Donjon supprimé.");
+        }
+    }
+
+    pub fn confirm_duo_trio_delete(&mut self, index: usize) {
+        if index < self.data.duo_trios.len() {
+            self.data.duo_trios.remove(index);
+            self.clear_duo_trio_transient_state();
+            self.persist_with_status("Run duo/trio supprime.");
+        }
+    }
+
+    pub fn confirm_arena_delete(&mut self, index: usize) {
+        if index < self.data.arenas.len() {
+            self.data.arenas.remove(index);
+            self.clear_arena_transient_state();
+            self.persist_with_status("PL arène supprimé.");
+        }
+    }
+
+    pub fn open_clear_all_dialog(&mut self) {
+        self.show_clear_all_confirm = true;
+    }
+
+    pub fn close_clear_all_dialog(&mut self) {
+        self.show_clear_all_confirm = false;
+    }
+
+    pub fn clear_all(&mut self) {
+        self.data = AppData::default();
+        self.zone_form = ZoneForm::default();
+        self.dungeon_form = DungeonForm::default();
+        self.duo_trio_form = DuoTrioForm::default();
+        self.arena_form = ArenaForm::default();
+        self.zone_form_error = None;
+        self.dungeon_form_error = None;
+        self.duo_trio_form_error = None;
+        self.arena_form_error = None;
+        self.activity_search_time_touched = false;
+        self.activity_search_time_error = None;
+        self.zone_search.clear();
+        self.dungeon_search.clear();
+        self.duo_trio_search.clear();
+        self.arena_search.clear();
+        self.clear_zone_transient_state();
+        self.clear_dungeon_transient_state();
+        self.clear_duo_trio_transient_state();
+        self.clear_arena_transient_state();
+        self.show_clear_all_confirm = false;
+        self.show_load_dialog = false;
+        self.show_load_confirm = false;
+        self.pending_load_action = None;
+        self.persist_with_status("Toutes les données ont été effacées.");
+    }
+
+    fn load_from_action(&mut self, action: LoadAction) {
+        match action {
+            LoadAction::ReloadLocal => self.reload_local_data(),
+            LoadAction::ImportExternal(path) => {
+                let local_path = storage::data_file_path();
+                self.import_from_path_to_save_path(&path, &local_path);
+            }
+        }
+    }
+
+    fn reload_local_data(&mut self) {
+        let path = storage::data_file_path();
+
+        if !path.exists() {
+            self.set_status(
+                StatusKind::Error,
+                format!("Aucune sauvegarde locale trouvée : {}", path.display()),
+            );
+            return;
+        }
+
+        match storage::load_data_from_path(&path) {
+            Ok(result) => {
+                let mut message =
+                    format!("Sauvegarde locale rechargée. Fichier : {}", path.display());
+                let status_kind = if result.cleaned_legacy_entries > 0 {
+                    message.push(' ');
+                    message.push_str(&format!(
+                        "{} ancienne(s) entrée(s) legacy ont été ignorées au rechargement. Le fichier local n'a pas été modifié automatiquement.",
+                        result.cleaned_legacy_entries
+                    ));
+                    StatusKind::Info
+                } else {
+                    StatusKind::Success
+                };
+
+                self.apply_loaded_data(result.data);
+                self.set_status(status_kind, message);
+            }
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible de recharger la sauvegarde locale : {error}"),
+            ),
+        }
+    }
+
+    fn import_from_path_to_save_path(&mut self, source_path: &Path, save_path: &Path) {
+        match storage::load_data_from_path(source_path) {
+            Ok(result) => match storage::save_data_to_path(&result.data, save_path) {
+                Ok(saved_path) => {
+                    let mut message = format!(
+                        "Import réussi. Source : {}. Sauvegarde locale mise à jour : {}",
+                        source_path.display(),
+                        saved_path.display()
+                    );
+
+                    if result.cleaned_legacy_entries > 0 {
+                        message.push(' ');
+                        message.push_str(&format!(
+                            "{} ancienne(s) entrée(s) legacy ont été retirées lors de l'import.",
+                            result.cleaned_legacy_entries
+                        ));
+                    }
+
+                    message.push_str(
+                        " Une sauvegarde .bak de l'ancien fichier local a été créée lorsqu'un fichier existait déjà.",
+                    );
+
+                    self.apply_loaded_data(result.data);
+                    self.set_status(StatusKind::Success, message);
+                }
+                Err(error) => self.set_status(
+                    StatusKind::Error,
+                    format!("Import impossible : sauvegarde locale non mise à jour ({error})."),
+                ),
+            },
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible d'importer {} : {error}", source_path.display()),
+            ),
+        }
+    }
+
+    pub fn set_status(&mut self, kind: StatusKind, message: impl Into<String>) {
+        self.status = Some(StatusBanner {
+            kind,
+            message: message.into(),
+        });
+    }
+
+    pub fn clear_status(&mut self) {
+        self.status = None;
+    }
+
+    fn persist_with_status(&mut self, success_message: &str) {
+        match storage::save_data(&self.data) {
+            Ok(path) => self.set_status(
+                StatusKind::Success,
+                format!("{success_message} Fichier : {}", path.display()),
+            ),
+            Err(error) => {
+                self.set_status(StatusKind::Error, format!("Erreur de sauvegarde : {error}"))
+            }
+        }
+    }
+
+    fn clear_zone_transient_state(&mut self) {
+        self.zone_edit = None;
+        self.zone_delete_confirm = None;
+    }
+
+    fn clear_dungeon_transient_state(&mut self) {
+        self.dungeon_edit = None;
+        self.dungeon_delete_confirm = None;
+    }
+
+    fn clear_duo_trio_transient_state(&mut self) {
+        self.duo_trio_edit = None;
+        self.duo_trio_delete_confirm = None;
+    }
+
+    fn clear_arena_transient_state(&mut self) {
+        self.arena_edit = None;
+        self.arena_delete_confirm = None;
+    }
+
+    fn apply_loaded_data(&mut self, data: AppData) {
+        self.data = data;
+        self.reset_loaded_ui_state();
+    }
+
+    fn reset_loaded_ui_state(&mut self) {
+        self.zone_form = ZoneForm::default();
+        self.dungeon_form = DungeonForm::default();
+        self.duo_trio_form = DuoTrioForm::default();
+        self.arena_form = ArenaForm::default();
+        self.zone_form_error = None;
+        self.dungeon_form_error = None;
+        self.duo_trio_form_error = None;
+        self.arena_form_error = None;
+        self.activity_search_time_touched = false;
+        self.activity_search_time_error = None;
+        self.zone_search.clear();
+        self.dungeon_search.clear();
+        self.duo_trio_search.clear();
+        self.arena_search.clear();
+        self.clear_zone_transient_state();
+        self.clear_dungeon_transient_state();
+        self.clear_duo_trio_transient_state();
+        self.clear_arena_transient_state();
+        self.show_clear_all_confirm = false;
+        self.show_load_dialog = false;
+        self.show_load_confirm = false;
+        self.pending_load_action = None;
+    }
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
+        self.render(ctx);
+    }
+}
+
+fn load_background_texture(ctx: &egui::Context) -> Result<TextureHandle, String> {
+    let bytes = include_bytes!("../fond/img.png");
+    load_texture_from_bytes(ctx, "app-background", bytes)
+        .map_err(|error| format!("Image de fond invalide: {error}"))
+}
+
+fn load_app_icon_texture(ctx: &egui::Context) -> Result<TextureHandle, String> {
+    load_texture_from_bytes(ctx, "app-icon", APP_ICON_BYTES)
+        .map_err(|error| format!("Icône invalide: {error}"))
+}
+
+fn load_app_icon_data() -> Result<egui::IconData, String> {
+    let image = image::load_from_memory(APP_ICON_BYTES)
+        .map_err(|error| error.to_string())?
+        .to_rgba8();
+    let resized = image::DynamicImage::ImageRgba8(image)
+        .resize(APP_ICON_SIZE, APP_ICON_SIZE, FilterType::Lanczos3)
+        .to_rgba8();
+
+    let mut canvas =
+        image::RgbaImage::from_pixel(APP_ICON_SIZE, APP_ICON_SIZE, image::Rgba([0, 0, 0, 0]));
+    let offset_x = i64::from((APP_ICON_SIZE - resized.width()) / 2);
+    let offset_y = i64::from((APP_ICON_SIZE - resized.height()) / 2);
+    image::imageops::overlay(&mut canvas, &resized, offset_x, offset_y);
+
+    Ok(egui::IconData {
+        rgba: canvas.into_raw(),
+        width: APP_ICON_SIZE,
+        height: APP_ICON_SIZE,
+    })
+}
+
+fn class_texture_bytes(class: DofusClass) -> &'static [u8] {
+    match class {
+        DofusClass::Cra => CLASS_CRA_BYTES,
+        DofusClass::Ecaflip => CLASS_ECAFLIP_BYTES,
+        DofusClass::Eniripsa => CLASS_ENIRIPSA_BYTES,
+        DofusClass::Enutrof => CLASS_ENUTROF_BYTES,
+        DofusClass::Feca => CLASS_FECA_BYTES,
+        DofusClass::Iop => CLASS_IOP_BYTES,
+        DofusClass::Osamodas => CLASS_OSAMODAS_BYTES,
+        DofusClass::Pandawa => CLASS_PANDAWA_BYTES,
+        DofusClass::Sacrieur => CLASS_SACRIEUR_BYTES,
+        DofusClass::Sadida => CLASS_SADIDA_BYTES,
+        DofusClass::Sram => CLASS_SRAM_BYTES,
+        DofusClass::Xelor => CLASS_XELOR_BYTES,
+    }
+}
+
+fn load_class_textures(ctx: &egui::Context) -> HashMap<DofusClass, TextureHandle> {
+    let mut textures = HashMap::new();
+
+    for class in DofusClass::all() {
+        let texture_id = format!("class-{}", class.storage_key());
+
+        if let Ok(texture) = load_texture_from_bytes(ctx, &texture_id, class_texture_bytes(class)) {
+            textures.insert(class, texture);
+        }
+    }
+
+    textures
+}
+
+fn load_texture_from_bytes(
+    ctx: &egui::Context,
+    texture_id: &str,
+    bytes: &[u8],
+) -> Result<TextureHandle, String> {
+    let image = image::load_from_memory(bytes)
+        .map_err(|error| error.to_string())?
+        .to_rgba8();
+    let size = [image.width() as usize, image.height() as usize];
+    let color_image = ColorImage::from_rgba_unmultiplied(size, image.as_raw());
+
+    Ok(ctx.load_texture(texture_id, color_image, TextureOptions::LINEAR))
+}
+
+fn require_character_class(class: Option<DofusClass>) -> Result<DofusClass, String> {
+    class.ok_or_else(|| "La classe du personnage est obligatoire.".to_string())
+}
+
+fn build_zone_entry(form: &ZoneForm) -> Result<ZoneEntry, String> {
+    let recorded_at = calculations::parse_recorded_at(&form.recorded_at_input)?;
+    let session_time_seconds = calculations::parse_duration_input(&form.session_time)
+        .map_err(|error| format!("Temps de session invalide. {error}"))?;
+    let session_total_kamas = calculations::parse_non_negative_f32(
+        &form.session_total_kamas,
+        "Valeur totale de session",
+    )?;
+
+    calculations::sanitize_zone_entry(ZoneEntry {
+        name: form.name.trim().to_string(),
+        character_class: Some(require_character_class(form.character_class)?),
+        recorded_at,
+        session_time_seconds,
+        session_total_kamas,
+        kamas_per_hour: 0.0,
+    })
+}
+
+fn build_dungeon_entry(form: &DungeonForm) -> Result<DungeonEntry, String> {
+    let recorded_at = calculations::parse_recorded_at(&form.recorded_at_input)?;
+    let run_time_seconds = calculations::parse_duration_input(&form.run_time)
+        .map_err(|error| format!("Temps moyen du donjon invalide. {error}"))?;
+    let gross_kamas_per_run =
+        calculations::parse_non_negative_f32(&form.gross_kamas_per_run, "Gain brut moyen")?;
+    let key_price = calculations::parse_non_negative_f32(&form.key_price, "Prix de la cle")?;
+
+    calculations::sanitize_dungeon_entry(DungeonEntry {
+        name: form.name.trim().to_string(),
+        character_class: Some(require_character_class(form.character_class)?),
+        recorded_at,
+        run_time_minutes: calculations::seconds_to_minutes(run_time_seconds),
+        gross_kamas_per_run,
+        key_price,
+        net_kamas_per_run: 0.0,
+        kamas_per_hour: 0.0,
+    })
+}
+
+fn build_duo_trio_entry(form: &DuoTrioForm) -> Result<DuoTrioEntry, String> {
+    let recorded_at = calculations::parse_recorded_at(&form.recorded_at_input)?;
+    let run_time_seconds = calculations::parse_duration_input(&form.run_time)
+        .map_err(|error| format!("Temps du run invalide. {error}"))?;
+    let loot_kamas_per_run =
+        calculations::parse_non_negative_f32(&form.loot_kamas_per_run, "Loot total du run")?;
+    let capture_stone_price = calculations::parse_non_negative_f32(
+        &form.capture_stone_price,
+        "Prix de la pierre de capture",
+    )?;
+    let key_unit_price =
+        calculations::parse_non_negative_f32(&form.key_unit_price, "Prix unitaire de la cle")?;
+    let full_soul_sale_price = calculations::parse_non_negative_f32(
+        &form.full_soul_sale_price,
+        "Prix de vente de la capture pleine",
+    )?;
+
+    calculations::sanitize_duo_trio_entry(DuoTrioEntry {
+        name: form.name.trim().to_string(),
+        character_class: Some(require_character_class(form.character_class)?),
+        recorded_at,
+        party_mode: form.party_mode,
+        run_time_seconds,
+        loot_kamas_per_run,
+        capture_stone_price,
+        key_unit_price,
+        keys_count: 0,
+        total_key_cost: 0.0,
+        full_soul_sale_price,
+        gross_kamas_per_run: 0.0,
+        total_cost: 0.0,
+        net_kamas_per_run: 0.0,
+        kamas_per_hour: 0.0,
+    })
+}
+
+fn build_arena_entry(form: &ArenaForm) -> Result<ArenaEntry, String> {
+    let recorded_at = calculations::parse_recorded_at(&form.recorded_at_input)?;
+    let round_time_seconds = calculations::parse_duration_input(&form.round_time)
+        .map_err(|error| format!("Temps de ronde invalide. {error}"))?;
+    let seat_price = calculations::parse_non_negative_f32(&form.seat_price, "Prix d'une place")?;
+    let seats_sold = calculations::parse_u32(&form.seats_sold)
+        .ok_or_else(|| "Nombre de places vendues invalide.".to_string())?;
+    let capture_price =
+        calculations::parse_non_negative_f32(&form.capture_price, "Prix d'une capture")?;
+    let captures_count = calculations::parse_u32(&form.captures_count)
+        .ok_or_else(|| "Nombre de captures invalide.".to_string())?;
+
+    calculations::sanitize_arena_entry(ArenaEntry {
+        name: form.name.trim().to_string(),
+        character_class: Some(require_character_class(form.character_class)?),
+        recorded_at,
+        round_time_minutes: calculations::seconds_to_minutes(round_time_seconds),
+        seat_price,
+        seats_sold,
+        capture_price,
+        captures_count,
+        gross_revenue: 0.0,
+        total_capture_cost: 0.0,
+        net_profit: 0.0,
+        kamas_per_hour: 0.0,
+    })
+}
+
+fn zone_form_from_entry(entry: &ZoneEntry) -> ZoneForm {
+    ZoneForm {
+        name: entry.name.clone(),
+        character_class: entry.character_class,
+        recorded_at_input: calculations::format_recorded_at(entry.recorded_at),
+        session_time: calculations::duration_input_from_seconds(entry.session_time_seconds),
+        session_total_kamas: calculations::format_number(entry.session_total_kamas),
+    }
+}
+
+fn dungeon_form_from_entry(entry: &DungeonEntry) -> DungeonForm {
+    DungeonForm {
+        name: entry.name.clone(),
+        character_class: entry.character_class,
+        recorded_at_input: calculations::format_recorded_at(entry.recorded_at),
+        run_time: calculations::duration_input_from_minutes(entry.run_time_minutes),
+        gross_kamas_per_run: calculations::format_number(entry.gross_kamas_per_run),
+        key_price: calculations::format_number(entry.key_price),
+    }
+}
+
+fn duo_trio_form_from_entry(entry: &DuoTrioEntry) -> DuoTrioForm {
+    DuoTrioForm {
+        name: entry.name.clone(),
+        character_class: entry.character_class,
+        recorded_at_input: calculations::format_recorded_at(entry.recorded_at),
+        party_mode: entry.party_mode,
+        run_time: calculations::duration_input_from_seconds(entry.run_time_seconds),
+        loot_kamas_per_run: calculations::format_number(entry.loot_kamas_per_run),
+        capture_stone_price: calculations::format_number(entry.capture_stone_price),
+        key_unit_price: calculations::format_number(entry.key_unit_price),
+        full_soul_sale_price: calculations::format_number(entry.full_soul_sale_price),
+    }
+}
+
+fn arena_form_from_entry(entry: &ArenaEntry) -> ArenaForm {
+    ArenaForm {
+        name: entry.name.clone(),
+        character_class: entry.character_class,
+        recorded_at_input: calculations::format_recorded_at(entry.recorded_at),
+        round_time: calculations::duration_input_from_minutes(entry.round_time_minutes),
+        seat_price: calculations::format_number(entry.seat_price),
+        seats_sold: entry.seats_sold.to_string(),
+        capture_price: calculations::format_number(entry.capture_price),
+        captures_count: entry.captures_count.to_string(),
+    }
+}
+
+pub fn push_and_sort_by<T, F>(items: &mut Vec<T>, item: T, score: F)
+where
+    F: Fn(&T) -> f32,
+{
+    items.push(item);
+    items.sort_by(|left, right| score(right).total_cmp(&score(left)));
+}
+
+pub fn replace_and_sort_by<T, F>(items: &mut [T], index: usize, updated: T, score: F)
+where
+    F: Fn(&T) -> f32,
+{
+    if let Some(slot) = items.get_mut(index) {
+        *slot = updated;
+        items.sort_by(|left, right| score(right).total_cmp(&score(left)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{DofusClass, DurationInput, PartyMode};
+    use chrono::NaiveDateTime;
+    use std::path::PathBuf;
+
+    fn dt(value: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").unwrap()
+    }
+
+    fn duration_input(hours: &str, minutes: &str, seconds: &str) -> DurationInput {
+        DurationInput {
+            hours: hours.to_string(),
+            minutes: minutes.to_string(),
+            seconds: seconds.to_string(),
+        }
+    }
+
+    fn sample_loaded_data() -> AppData {
+        AppData {
+            zones: vec![ZoneEntry {
+                name: "Chargée".to_string(),
+                character_class: Some(DofusClass::Cra),
+                recorded_at: None,
+                session_time_seconds: 3_600.0,
+                session_total_kamas: 150_000.0,
+                kamas_per_hour: 150_000.0,
+            }],
+            ..AppData::default()
+        }
+    }
+
+    #[test]
+    fn apply_loaded_data_resets_transient_ui_state() {
+        let mut app = MyApp {
+            current_tab: Tab::Donjons,
+            ..Default::default()
+        };
+        app.zone_form.name = "Zone".to_string();
+        app.dungeon_form.name = "Donjon".to_string();
+        app.duo_trio_form.name = "Run".to_string();
+        app.arena_form.name = "Arena".to_string();
+        app.zone_form_error = Some("zone".to_string());
+        app.dungeon_form_error = Some("donjon".to_string());
+        app.duo_trio_form_error = Some("run".to_string());
+        app.arena_form_error = Some("arena".to_string());
+        app.activity_search_class = Some(DofusClass::Cra);
+        app.activity_search_time = duration_input("01", "15", "00");
+        app.activity_search_time_touched = true;
+        app.activity_search_time_error = Some("temps".to_string());
+        app.zone_search = "plaine".to_string();
+        app.dungeon_search = "blop".to_string();
+        app.duo_trio_search = "trio".to_string();
+        app.arena_search = "arene".to_string();
+        app.zone_edit = Some(InlineEditState {
+            index: 0,
+            form: ZoneForm::default(),
+            error: Some("edit".to_string()),
+        });
+        app.dungeon_edit = Some(InlineEditState {
+            index: 0,
+            form: DungeonForm::default(),
+            error: Some("edit".to_string()),
+        });
+        app.duo_trio_edit = Some(InlineEditState {
+            index: 0,
+            form: DuoTrioForm::default(),
+            error: Some("edit".to_string()),
+        });
+        app.arena_edit = Some(InlineEditState {
+            index: 0,
+            form: ArenaForm::default(),
+            error: Some("edit".to_string()),
+        });
+        app.zone_delete_confirm = Some(0);
+        app.dungeon_delete_confirm = Some(0);
+        app.duo_trio_delete_confirm = Some(0);
+        app.arena_delete_confirm = Some(0);
+        app.show_clear_all_confirm = true;
+        app.show_load_dialog = true;
+        app.show_load_confirm = true;
+        app.pending_load_action = Some(LoadAction::ReloadLocal);
+
+        app.apply_loaded_data(sample_loaded_data());
+
+        assert_eq!(app.current_tab, Tab::Donjons);
+        assert_eq!(app.data.zones.len(), 1);
+        assert!(app.zone_form.name.is_empty());
+        assert!(app.dungeon_form.name.is_empty());
+        assert!(app.duo_trio_form.name.is_empty());
+        assert!(app.arena_form.name.is_empty());
+        assert!(app.zone_form_error.is_none());
+        assert!(app.dungeon_form_error.is_none());
+        assert!(app.duo_trio_form_error.is_none());
+        assert!(app.arena_form_error.is_none());
+        assert_eq!(app.activity_search_class, Some(DofusClass::Cra));
+        assert_eq!(app.activity_search_time, duration_input("01", "15", "00"));
+        assert!(!app.activity_search_time_touched);
+        assert!(app.activity_search_time_error.is_none());
+        assert!(app.zone_search.is_empty());
+        assert!(app.dungeon_search.is_empty());
+        assert!(app.duo_trio_search.is_empty());
+        assert!(app.arena_search.is_empty());
+        assert!(app.zone_edit.is_none());
+        assert!(app.dungeon_edit.is_none());
+        assert!(app.duo_trio_edit.is_none());
+        assert!(app.arena_edit.is_none());
+        assert!(app.zone_delete_confirm.is_none());
+        assert!(app.dungeon_delete_confirm.is_none());
+        assert!(app.duo_trio_delete_confirm.is_none());
+        assert!(app.arena_delete_confirm.is_none());
+        assert!(!app.show_clear_all_confirm);
+        assert!(!app.show_load_dialog);
+        assert!(!app.show_load_confirm);
+        assert!(app.pending_load_action.is_none());
+    }
+
+    #[test]
+    fn failed_import_keeps_current_data() {
+        let mut app = MyApp {
+            data: sample_loaded_data(),
+            ..Default::default()
+        };
+
+        app.load_from_action(LoadAction::ImportExternal(PathBuf::from(
+            "C:\\missing\\evofarm.json",
+        )));
+
+        assert_eq!(app.data.zones.len(), 1);
+        assert_eq!(app.data.zones[0].name, "Chargée");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Error)
+        ));
+    }
+
+    #[test]
+    fn replace_and_sort_promotes_updated_entry() {
+        let mut zones = vec![
+            ZoneEntry {
+                name: "Plaines".to_string(),
+                character_class: Some(DofusClass::Cra),
+                recorded_at: None,
+                session_time_seconds: 3_600.0,
+                session_total_kamas: 200_000.0,
+                kamas_per_hour: 200_000.0,
+            },
+            ZoneEntry {
+                name: "Forêt".to_string(),
+                character_class: Some(DofusClass::Sadida),
+                recorded_at: None,
+                session_time_seconds: 5_400.0,
+                session_total_kamas: 135_000.0,
+                kamas_per_hour: 90_000.0,
+            },
+        ];
+
+        replace_and_sort_by(
+            &mut zones,
+            1,
+            ZoneEntry {
+                name: "Forêt".to_string(),
+                character_class: Some(DofusClass::Cra),
+                recorded_at: None,
+                session_time_seconds: 3_600.0,
+                session_total_kamas: 300_000.0,
+                kamas_per_hour: 300_000.0,
+            },
+            |entry| entry.kamas_per_hour,
+        );
+
+        assert_eq!(zones[0].name, "Forêt");
+        assert_eq!(zones[0].kamas_per_hour, 300_000.0);
+    }
+
+    #[test]
+    fn build_zone_entry_uses_session_values() {
+        let form = ZoneForm {
+            name: "Cimetiere".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            session_time: duration_input("01", "30", "00"),
+            session_total_kamas: "450000".to_string(),
+        };
+
+        let entry = build_zone_entry(&form).unwrap();
+
+        assert_eq!(entry.name, "Cimetiere");
+        assert_eq!(entry.character_class, Some(DofusClass::Cra));
+        assert_eq!(entry.recorded_at, Some(dt("2026-03-08 14:45")));
+        assert_eq!(entry.session_time_seconds, 5_400.0);
+        assert_eq!(entry.session_total_kamas, 450_000.0);
+        assert_eq!(entry.kamas_per_hour, 300_000.0);
+    }
+
+    #[test]
+    fn build_zone_entry_requires_character_class() {
+        let form = ZoneForm {
+            name: "Cimetiere".to_string(),
+            character_class: None,
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            session_time: duration_input("01", "30", "00"),
+            session_total_kamas: "450000".to_string(),
+        };
+
+        let error = build_zone_entry(&form).unwrap_err();
+
+        assert_eq!(error, "La classe du personnage est obligatoire.");
+    }
+
+    #[test]
+    fn build_duo_trio_entry_uses_party_size_and_capture_values() {
+        let form = DuoTrioForm {
+            name: "Trio Illy".to_string(),
+            character_class: Some(DofusClass::Enutrof),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            party_mode: PartyMode::Trio,
+            run_time: duration_input("01", "20", "00"),
+            loot_kamas_per_run: "320000".to_string(),
+            capture_stone_price: "45000".to_string(),
+            key_unit_price: "12000".to_string(),
+            full_soul_sale_price: "180000".to_string(),
+        };
+
+        let entry = build_duo_trio_entry(&form).unwrap();
+
+        assert_eq!(entry.character_class, Some(DofusClass::Enutrof));
+        assert_eq!(entry.party_mode, PartyMode::Trio);
+        assert_eq!(entry.keys_count, 3);
+        assert_eq!(entry.total_key_cost, 36_000.0);
+        assert_eq!(entry.gross_kamas_per_run, 500_000.0);
+        assert_eq!(entry.total_cost, 81_000.0);
+        assert_eq!(entry.net_kamas_per_run, 419_000.0);
+        assert_eq!(entry.kamas_per_hour, 314_250.0);
+    }
+
+    #[test]
+    fn build_dungeon_entry_accepts_grouped_numeric_inputs() {
+        let form = DungeonForm {
+            name: "Blop".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            run_time: duration_input("00", "20", "00"),
+            gross_kamas_per_run: "120 000".to_string(),
+            key_price: "15_000".to_string(),
+        };
+
+        let entry = build_dungeon_entry(&form).unwrap();
+
+        assert_eq!(entry.net_kamas_per_run, 105_000.0);
+        assert_eq!(entry.kamas_per_hour, 315_000.0);
+    }
+
+    #[test]
+    fn build_arena_entry_accepts_grouped_numeric_inputs() {
+        let form = ArenaForm {
+            name: "Bworker".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            round_time: duration_input("00", "30", "00"),
+            seat_price: "50 000".to_string(),
+            seats_sold: "7".to_string(),
+            capture_price: "120_000".to_string(),
+            captures_count: "10".to_string(),
+        };
+
+        let entry = build_arena_entry(&form).unwrap();
+
+        assert_eq!(entry.gross_revenue, 350_000.0);
+        assert_eq!(entry.total_capture_cost, 1_200_000.0);
+        assert_eq!(entry.net_profit, -850_000.0);
+        assert_eq!(entry.kamas_per_hour, -1_700_000.0);
+    }
+
+    #[test]
+    fn build_dungeon_entry_requires_character_class() {
+        let form = DungeonForm {
+            name: "Blop".to_string(),
+            character_class: None,
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            run_time: duration_input("00", "20", "00"),
+            gross_kamas_per_run: "120000".to_string(),
+            key_price: "15000".to_string(),
+        };
+
+        let error = build_dungeon_entry(&form).unwrap_err();
+
+        assert_eq!(error, "La classe du personnage est obligatoire.");
+    }
+
+    #[test]
+    fn build_duo_trio_entry_requires_character_class() {
+        let form = DuoTrioForm {
+            name: "Trio Illy".to_string(),
+            character_class: None,
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            party_mode: PartyMode::Trio,
+            run_time: duration_input("01", "20", "00"),
+            loot_kamas_per_run: "320000".to_string(),
+            capture_stone_price: "45000".to_string(),
+            key_unit_price: "12000".to_string(),
+            full_soul_sale_price: "180000".to_string(),
+        };
+
+        let error = build_duo_trio_entry(&form).unwrap_err();
+
+        assert_eq!(error, "La classe du personnage est obligatoire.");
+    }
+
+    #[test]
+    fn build_arena_entry_requires_character_class() {
+        let form = ArenaForm {
+            name: "Bworker".to_string(),
+            character_class: None,
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            round_time: duration_input("00", "30", "00"),
+            seat_price: "50000".to_string(),
+            seats_sold: "7".to_string(),
+            capture_price: "120000".to_string(),
+            captures_count: "10".to_string(),
+        };
+
+        let error = build_arena_entry(&form).unwrap_err();
+
+        assert_eq!(error, "La classe du personnage est obligatoire.");
+    }
+
+    #[test]
+    fn replace_and_sort_ignores_out_of_bounds_index() {
+        let mut zones = vec![ZoneEntry {
+            name: "Plaine".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at: None,
+            session_time_seconds: 3_600.0,
+            session_total_kamas: 100_000.0,
+            kamas_per_hour: 100_000.0,
+        }];
+
+        replace_and_sort_by(
+            &mut zones,
+            10,
+            ZoneEntry {
+                name: "Foret".to_string(),
+                character_class: Some(DofusClass::Feca),
+                recorded_at: None,
+                session_time_seconds: 1_800.0,
+                session_total_kamas: 200_000.0,
+                kamas_per_hour: 400_000.0,
+            },
+            |entry| entry.kamas_per_hour,
+        );
+
+        assert_eq!(zones.len(), 1);
+        assert_eq!(zones[0].name, "Plaine");
+    }
+
+    #[test]
+    fn replace_and_sort_promotes_duo_trio_edit() {
+        let mut runs = vec![
+            DuoTrioEntry {
+                name: "Duo Qu'Tan".to_string(),
+                character_class: Some(DofusClass::Iop),
+                recorded_at: None,
+                party_mode: PartyMode::Duo,
+                run_time_seconds: 3_600.0,
+                loot_kamas_per_run: 120_000.0,
+                capture_stone_price: 40_000.0,
+                key_unit_price: 10_000.0,
+                keys_count: 2,
+                total_key_cost: 20_000.0,
+                full_soul_sale_price: 110_000.0,
+                gross_kamas_per_run: 230_000.0,
+                total_cost: 60_000.0,
+                net_kamas_per_run: 170_000.0,
+                kamas_per_hour: 170_000.0,
+            },
+            DuoTrioEntry {
+                name: "Trio Illy".to_string(),
+                character_class: Some(DofusClass::Enutrof),
+                recorded_at: None,
+                party_mode: PartyMode::Trio,
+                run_time_seconds: 4_800.0,
+                loot_kamas_per_run: 320_000.0,
+                capture_stone_price: 45_000.0,
+                key_unit_price: 12_000.0,
+                keys_count: 3,
+                total_key_cost: 36_000.0,
+                full_soul_sale_price: 180_000.0,
+                gross_kamas_per_run: 500_000.0,
+                total_cost: 81_000.0,
+                net_kamas_per_run: 419_000.0,
+                kamas_per_hour: 314_250.0,
+            },
+        ];
+
+        replace_and_sort_by(
+            &mut runs,
+            0,
+            DuoTrioEntry {
+                name: "Duo Qu'Tan".to_string(),
+                character_class: Some(DofusClass::Cra),
+                recorded_at: None,
+                party_mode: PartyMode::Trio,
+                run_time_seconds: 3_600.0,
+                loot_kamas_per_run: 350_000.0,
+                capture_stone_price: 40_000.0,
+                key_unit_price: 10_000.0,
+                keys_count: 3,
+                total_key_cost: 30_000.0,
+                full_soul_sale_price: 200_000.0,
+                gross_kamas_per_run: 550_000.0,
+                total_cost: 70_000.0,
+                net_kamas_per_run: 480_000.0,
+                kamas_per_hour: 480_000.0,
+            },
+            |entry| entry.kamas_per_hour,
+        );
+
+        assert_eq!(runs[0].name, "Duo Qu'Tan");
+        assert_eq!(runs[0].character_class, Some(DofusClass::Cra));
+        assert_eq!(runs[0].party_mode, PartyMode::Trio);
+        assert_eq!(runs[0].kamas_per_hour, 480_000.0);
+    }
+}

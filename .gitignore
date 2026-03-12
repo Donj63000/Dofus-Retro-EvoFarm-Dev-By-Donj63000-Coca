@@ -1,0 +1,22 @@
+/target/
+
+# JetBrains
+/.idea/
+*.iml
+
+# Visual Studio and VS Code
+/.vs/
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+/clody.zip
