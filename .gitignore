@@ -20,3 +20,16 @@ Desktop.ini
 *.tmp
 *.temp
 /clody.zip
+
+# Local instructions and planning files
+AGENTS.md
+agents.md
+PLAN.md
+Plan.md
+plan.md
+memory.md
+
+# Local packaged artifacts
+/ClodyFarmPro.exe
+/EvoFarm.zip
+/evofarm.zip

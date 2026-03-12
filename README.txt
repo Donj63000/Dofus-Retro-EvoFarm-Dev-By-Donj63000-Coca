@@ -60,6 +60,13 @@ Les bilans et la recherche d'activite permettent ensuite de repondre rapidement 
 - "Que puis-je lancer si j'ai seulement 30 minutes ou 1 heure ?"
 - "Quelle activite est la plus fiable sur mon historique recent ?"
 
+Utilisation du logiciel
+-----------------------
+
+Si vous voulez simplement utiliser le logiciel, `EvoFarm.exe` est l'executable directement utilisable.
+
+Si vous voulez modifier le logiciel, adapter son comportement ou travailler sur le code source, le projet peut etre recompile en Rust.
+
 Sauvegarde des donnees
 ----------------------
 
@@ -79,7 +86,8 @@ Lancement en developpement
 --------------------------
 
 1. Ouvrir le dossier du projet.
-2. Executer:
+2. Installer Rust et Cargo si necessaire.
+3. Executer:
 
 `cargo run`
 
