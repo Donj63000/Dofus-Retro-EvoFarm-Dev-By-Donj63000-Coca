@@ -67,6 +67,20 @@ Si vous voulez simplement utiliser le logiciel, `EvoFarm.exe` est l'executable d
 
 Si vous voulez modifier le logiciel, adapter son comportement ou travailler sur le code source, le projet peut etre recompile en Rust.
 
+Ce que le logiciel fait sur votre PC
+------------------------------------
+
+Dans le code source de cette version, EvoFarm fonctionne comme une application locale de bureau.
+
+- Le logiciel ouvre une fenetre desktop et charge vos donnees locales si une sauvegarde existe deja.
+- Si aucune sauvegarde locale n'existe encore, le logiciel demarre avec des listes vides.
+- Les donnees de vos sessions sont enregistrees localement au format JSON sur votre machine.
+- Quand vous ajoutez, modifiez, supprimez ou sauvegardez des donnees, le fichier local est mis a jour.
+- Lorsqu'un ancien fichier existe deja, une copie de secours `.bak` est creee ou mise a jour avant remplacement.
+- Le logiciel peut lire un fichier JSON externe uniquement si vous utilisez vous-meme la fonction d'import et choisissez un fichier.
+- Les images et icones du projet sont integrees dans l'application au build, elles ne sont pas telechargees depuis Internet au lancement.
+- Le code source du projet ne contient pas d'appel reseau HTTP, de synchronisation cloud, ni de service Windows installe en arriere-plan.
+
 Sauvegarde des donnees
 ----------------------
 
