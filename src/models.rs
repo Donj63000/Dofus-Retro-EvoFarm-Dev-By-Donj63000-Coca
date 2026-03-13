@@ -202,7 +202,8 @@ pub struct ArenaEntry {
     pub kamas_per_hour: f32,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(default)]
 pub struct AppData {
     pub zones: Vec<ZoneEntry>,
     pub dungeons: Vec<DungeonEntry>,
@@ -210,7 +211,47 @@ pub struct AppData {
     pub arenas: Vec<ArenaEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub const PERSISTED_STATE_VERSION: u32 = 2;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedInlineEdit<T> {
+    pub index: usize,
+    pub form: T,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct DraftState {
+    pub zone_form: Option<ZoneForm>,
+    pub dungeon_form: Option<DungeonForm>,
+    pub duo_trio_form: Option<DuoTrioForm>,
+    pub arena_form: Option<ArenaForm>,
+    pub zone_edit: Option<PersistedInlineEdit<ZoneForm>>,
+    pub dungeon_edit: Option<PersistedInlineEdit<DungeonForm>>,
+    pub duo_trio_edit: Option<PersistedInlineEdit<DuoTrioForm>>,
+    pub arena_edit: Option<PersistedInlineEdit<ArenaForm>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PersistedState {
+    pub schema_version: u32,
+    pub data: AppData,
+    pub drafts: DraftState,
+}
+
+impl Default for PersistedState {
+    fn default() -> Self {
+        Self {
+            schema_version: PERSISTED_STATE_VERSION,
+            data: AppData::default(),
+            drafts: DraftState::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DurationInput {
     pub hours: String,
     pub minutes: String,
@@ -227,7 +268,8 @@ impl Default for DurationInput {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ZoneForm {
     pub name: String,
     pub character_class: Option<DofusClass>,
@@ -248,7 +290,8 @@ impl Default for ZoneForm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DungeonForm {
     pub name: String,
     pub character_class: Option<DofusClass>,
@@ -271,7 +314,8 @@ impl Default for DungeonForm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DuoTrioForm {
     pub name: String,
     pub character_class: Option<DofusClass>,
@@ -300,7 +344,8 @@ impl Default for DuoTrioForm {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ArenaForm {
     pub name: String,
     pub character_class: Option<DofusClass>,
@@ -324,6 +369,87 @@ impl Default for ArenaForm {
             capture_price: String::new(),
             captures_count: "10".to_string(),
         }
+    }
+}
+
+impl ZoneForm {
+    pub fn has_user_input(&self) -> bool {
+        !self.name.trim().is_empty()
+            || self.character_class.is_some()
+            || self.session_time != DurationInput::default()
+            || !self.session_total_kamas.trim().is_empty()
+    }
+}
+
+impl DungeonForm {
+    pub fn has_user_input(&self) -> bool {
+        !self.name.trim().is_empty()
+            || self.character_class.is_some()
+            || self.run_time != DurationInput::default()
+            || !self.gross_kamas_per_run.trim().is_empty()
+            || !self.key_price.trim().is_empty()
+    }
+}
+
+impl DuoTrioForm {
+    pub fn has_user_input(&self) -> bool {
+        !self.name.trim().is_empty()
+            || self.character_class.is_some()
+            || self.party_mode != PartyMode::Duo
+            || self.run_time != DurationInput::default()
+            || !self.loot_kamas_per_run.trim().is_empty()
+            || !self.capture_stone_price.trim().is_empty()
+            || !self.key_unit_price.trim().is_empty()
+            || !self.full_soul_sale_price.trim().is_empty()
+    }
+}
+
+impl ArenaForm {
+    pub fn has_user_input(&self) -> bool {
+        !self.name.trim().is_empty()
+            || self.character_class.is_some()
+            || self.round_time != DurationInput::default()
+            || !self.seat_price.trim().is_empty()
+            || self.seats_sold.trim() != "7"
+            || !self.capture_price.trim().is_empty()
+            || self.captures_count.trim() != "10"
+    }
+}
+
+impl DraftState {
+    pub fn restored_items_count(&self) -> usize {
+        let mut count = 0;
+
+        if self.zone_form.is_some() {
+            count += 1;
+        }
+        if self.dungeon_form.is_some() {
+            count += 1;
+        }
+        if self.duo_trio_form.is_some() {
+            count += 1;
+        }
+        if self.arena_form.is_some() {
+            count += 1;
+        }
+        if self.zone_edit.is_some() {
+            count += 1;
+        }
+        if self.dungeon_edit.is_some() {
+            count += 1;
+        }
+        if self.duo_trio_edit.is_some() {
+            count += 1;
+        }
+        if self.arena_edit.is_some() {
+            count += 1;
+        }
+
+        count
+    }
+
+    pub fn has_any_draft(&self) -> bool {
+        self.restored_items_count() > 0
     }
 }
 

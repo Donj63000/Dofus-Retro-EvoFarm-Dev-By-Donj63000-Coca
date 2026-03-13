@@ -1,13 +1,13 @@
 [package]
-name = "dofus_rentabilite"
+name = "markarthfarm"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
 [package.metadata.winres]
-ProductName = "EvoFarm"
-FileDescription = "EvoFarm"
-OriginalFilename = "EvoFarm.exe"
+ProductName = "MarkarthFarm"
+FileDescription = "MarkarthFarm"
+OriginalFilename = "MarkarthFarm.exe"
 
 [dependencies]
 eframe = "0.27"

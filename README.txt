@@ -1,7 +1,7 @@
-EvoFarm
+MarkarthFarm
 =======
 
-EvoFarm est une application desktop Rust dediee au suivi et a la comparaison de la rentabilite de sessions de farm sur DOFUS.
+MarkarthFarm est une application desktop Rust dediee au suivi et a la comparaison de la rentabilite de sessions de farm sur DOFUS.
 
 Le logiciel sert a enregistrer des donnees reelles de jeu, recalculer automatiquement les gains utiles, puis comparer rapidement les activites les plus interessantes selon votre classe, votre temps disponible et votre historique.
 
@@ -45,7 +45,7 @@ Fonctionnalites principales
 Pourquoi ce logiciel est utile
 ------------------------------
 
-EvoFarm ne se limite pas a stocker des notes. Il sert a prendre des decisions.
+MarkarthFarm ne se limite pas a stocker des notes. Il sert a prendre des decisions.
 
 L'idee est de partir de resultats reels observes en jeu, puis de transformer ces sessions en informations comparables:
 
@@ -63,14 +63,14 @@ Les bilans et la recherche d'activite permettent ensuite de repondre rapidement 
 Utilisation du logiciel
 -----------------------
 
-Si vous voulez simplement utiliser le logiciel, `EvoFarm.exe` est l'executable directement utilisable.
+Si vous voulez simplement utiliser le logiciel, `MarkarthFarm.exe` est l'executable directement utilisable.
 
 Si vous voulez modifier le logiciel, adapter son comportement ou travailler sur le code source, le projet peut etre recompile en Rust.
 
 Ce que le logiciel fait sur votre PC
 ------------------------------------
 
-Dans le code source de cette version, EvoFarm fonctionne comme une application locale de bureau.
+Dans le code source de cette version, MarkarthFarm fonctionne comme une application locale de bureau.
 
 - Le logiciel ouvre une fenetre desktop et charge vos donnees locales si une sauvegarde existe deja.
 - Si aucune sauvegarde locale n'existe encore, le logiciel demarre avec des listes vides.
@@ -88,11 +88,11 @@ Les donnees sont stockees localement au format JSON.
 
 Sous Windows, la sauvegarde locale est ecrite ici:
 
-`%LOCALAPPDATA%\dofus_rentabilite\data.json`
+`%LOCALAPPDATA%\MarkarthFarm\data.json`
 
 Une sauvegarde de secours peut egalement etre conservee ici:
 
-`%LOCALAPPDATA%\dofus_rentabilite\data.json.bak`
+`%LOCALAPPDATA%\MarkarthFarm\data.json.bak`
 
 Quand un fichier JSON externe est importe, son contenu remplace les donnees actuellement chargees puis met a jour la sauvegarde locale de l'application.
 
@@ -116,8 +116,8 @@ Pour generer l'executable Windows et l'archive de distribution:
 
 2. Recuperer les artefacts generes a la racine du projet:
 
-- `EvoFarm.exe`
-- `evofarm.zip`
+- `MarkarthFarm.exe`
+- `MarkarthFarm.zip`
 
 Structure du projet
 -------------------
@@ -137,4 +137,4 @@ Remerciements speciaux a Clody.
 
 Clody doit etre credite pour une partie du travail realise sur ce logiciel, pour une partie des idees qui l'ont fait avancer, et pour une partie de la maniere dont le projet a ete pense.
 
-EvoFarm n'est donc pas l'oeuvre d'un seul auteur. Ce logiciel n'a pas ete concu ni porte par une seule personne, et cette contribution fait pleinement partie de son histoire et de sa conception.
+MarkarthFarm n'est donc pas l'oeuvre d'un seul auteur. Ce logiciel n'a pas ete concu ni porte par une seule personne, et cette contribution fait pleinement partie de son histoire et de sa conception.

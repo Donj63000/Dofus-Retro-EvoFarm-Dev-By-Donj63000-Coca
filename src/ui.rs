@@ -20,7 +20,6 @@ use eframe::egui::TextureHandle;
 use egui_plot::{Bar, BarChart, Line, Plot, PlotPoint, PlotPoints, Points};
 use std::collections::HashMap;
 
-const HEADER_BREAKPOINT: f32 = 1020.0;
 const REPORT_CHART_HEIGHT: f32 = 280.0;
 const REPORT_TABLE_LIMIT: usize = 10;
 const DURATION_COMBO_WIDTH: f32 = 78.0;
@@ -1001,56 +1000,6 @@ fn confirm_dialog(
     confirmed
 }
 
-enum LoadDialogAction {
-    ReloadLocal,
-    ImportJson,
-}
-
-fn load_dialog(ctx: &egui::Context, open: &mut bool) -> Option<LoadDialogAction> {
-    if !*open {
-        return None;
-    }
-
-    let mut action = None;
-
-    if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
-        *open = false;
-        return None;
-    }
-
-    egui::Window::new("Chargement")
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .collapsible(false)
-        .resizable(false)
-        .default_width(440.0)
-        .show(ctx, |ui| {
-            let colors = theme::palette();
-            ui.label(
-                egui::RichText::new(
-                    "Choisissez le type de chargement a effectuer. Les donnees visibles seront remplacees seulement apres confirmation.",
-                )
-                .size(14.0)
-                .color(colors.text_secondary),
-            );
-            ui.add_space(14.0);
-            ui.horizontal_wrapped(|ui| {
-                if secondary_button(ui, "Annuler").clicked() {
-                    *open = false;
-                }
-                if secondary_button(ui, "Recharger la sauvegarde locale").clicked() {
-                    action = Some(LoadDialogAction::ReloadLocal);
-                    *open = false;
-                }
-                if primary_button(ui, "Importer un fichier JSON").clicked() {
-                    action = Some(LoadDialogAction::ImportJson);
-                    *open = false;
-                }
-            });
-        });
-
-    action
-}
-
 impl MyApp {
     pub fn render(&mut self, ctx: &egui::Context) {
         paint_background(ctx, self.background_texture.as_ref());
@@ -1081,20 +1030,6 @@ impl MyApp {
                     });
             });
 
-        if let Some(action) = load_dialog(ctx, &mut self.show_load_dialog) {
-            match action {
-                LoadDialogAction::ReloadLocal => self.request_reload_local(),
-                LoadDialogAction::ImportJson => {
-                    if let Some(path) = rfd::FileDialog::new()
-                        .add_filter("JSON", &["json"])
-                        .pick_file()
-                    {
-                        self.request_import_external(path);
-                    }
-                }
-            }
-        }
-
         if self.show_load_confirm {
             if let Some((title, body, confirm_label)) = self.pending_load_confirmation() {
                 let confirmed = confirm_dialog(
@@ -1117,12 +1052,22 @@ impl MyApp {
 
         if confirm_dialog(
             ctx,
-            &mut self.show_clear_all_confirm,
-            "Effacer toutes les données",
-            "Cette action supprime definitivement toutes les zones, donjons, runs duo/trio et sessions PL arene enregistres.",
-            "Tout effacer",
+            &mut self.show_clear_state_confirm,
+            "Effacer l'etat",
+            "Cette action vide seulement l'etat actuellement affiche. La sauvegarde locale n'est pas modifiee et pourra etre restauree avec l'option de rechargement.",
+            "Effacer l'etat",
         ) {
-            self.clear_all();
+            self.clear_current_state();
+        }
+
+        if confirm_dialog(
+            ctx,
+            &mut self.show_delete_local_save_confirm,
+            "Supprimer la sauvegarde locale",
+            "Cette action supprime definitivement le fichier local et son fichier .bak lorsqu'ils existent. L'etat actuellement affiche n'est pas efface automatiquement.",
+            "Supprimer la sauvegarde",
+        ) {
+            self.delete_local_save();
         }
     }
 
@@ -1158,46 +1103,106 @@ impl MyApp {
                                 }
 
                                 ui.vertical(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(APP_NAME)
-                                            .text_style(egui::TextStyle::Name("Title".into()))
-                                            .strong()
-                                            .color(colors.text_primary),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("Rentabilite comparee.")
-                                            .size(12.0)
-                                            .color(colors.text_secondary),
-                                    );
+                                    let brand_root =
+                                        APP_NAME.strip_suffix("Farm").unwrap_or(APP_NAME);
+
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(brand_root)
+                                                .size(24.0)
+                                                .strong()
+                                                .color(colors.text_primary),
+                                        );
+
+                                        egui::Frame::none()
+                                            .fill(colors.accent_soft)
+                                            .stroke(egui::Stroke::new(1.0, colors.accent))
+                                            .rounding(999.0)
+                                            .inner_margin(egui::Margin::symmetric(10.0, 4.0))
+                                            .show(ui, |ui| {
+                                                ui.label(
+                                                    egui::RichText::new("Farm")
+                                                        .size(13.0)
+                                                        .strong()
+                                                        .color(colors.accent),
+                                                );
+                                            });
+                                    });
                                 });
                             });
 
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui.available_width() < HEADER_BREAKPOINT {
-                                        if primary_button(ui, "Sauvegarder").clicked() {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                let options_menu = ui.menu_button(
+                                    egui::RichText::new("⚙")
+                                        .size(20.0)
+                                        .strong()
+                                        .color(colors.text_primary),
+                                    |ui| {
+                                        ui.set_min_width(240.0);
+
+                                        let save_response = primary_button(ui, "Sauvegarder l'etat");
+                                        let save_clicked = save_response.clicked();
+                                        save_response.on_hover_text(
+                                            "Sauvegarde les donnees validees et les brouillons en cours.",
+                                        );
+                                        if save_clicked {
                                             self.save();
+                                            ui.close_menu();
                                         }
-                                        if secondary_button(ui, "Chargement").clicked() {
-                                            self.open_load_dialog();
+
+                                        let reload_response =
+                                            secondary_button(ui, "Recharger la sauvegarde locale");
+                                        let reload_clicked = reload_response.clicked();
+                                        reload_response.on_hover_text(
+                                            "Recharge la derniere sauvegarde locale disponible.",
+                                        );
+                                        if reload_clicked {
+                                            self.request_reload_local();
+                                            ui.close_menu();
                                         }
-                                        if danger_button(ui, "Effacer").clicked() {
-                                            self.open_clear_all_dialog();
+
+                                        let import_response =
+                                            secondary_button(ui, "Importer un fichier JSON");
+                                        let import_clicked = import_response.clicked();
+                                        import_response.on_hover_text(
+                                            "Importe un fichier JSON puis met a jour la sauvegarde locale.",
+                                        );
+                                        if import_clicked {
+                                            ui.close_menu();
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .add_filter("JSON", &["json"])
+                                                .pick_file()
+                                            {
+                                                self.request_import_external(path);
+                                            }
                                         }
-                                    } else {
-                                        if primary_button(ui, "Sauvegarder").clicked() {
-                                            self.save();
+
+                                        ui.separator();
+
+                                        let clear_response = secondary_button(ui, "Effacer l'etat");
+                                        let clear_clicked = clear_response.clicked();
+                                        clear_response.on_hover_text(
+                                            "Vide seulement l'etat affiche.",
+                                        );
+                                        if clear_clicked {
+                                            self.open_clear_state_dialog();
+                                            ui.close_menu();
                                         }
-                                        if secondary_button(ui, "Chargement").clicked() {
-                                            self.open_load_dialog();
+
+                                        let delete_response =
+                                            danger_button(ui, "Supprimer la sauvegarde locale");
+                                        let delete_clicked = delete_response.clicked();
+                                        delete_response.on_hover_text(
+                                            "Supprime definitivement data.json et son fichier .bak.",
+                                        );
+                                        if delete_clicked {
+                                            self.open_delete_local_save_dialog();
+                                            ui.close_menu();
                                         }
-                                        if danger_button(ui, "Tout effacer").clicked() {
-                                            self.open_clear_all_dialog();
-                                        }
-                                    }
-                                },
-                            );
+                                    },
+                                );
+                                options_menu.response.on_hover_text("Options");
+                            });
                         });
 
                         if let Some(status) = self.status.as_ref() {
@@ -2092,6 +2097,16 @@ impl MyApp {
         );
         ui.add_space(6.0);
 
+        let Some((min_x, max_x)) = cumulative_chart_x_bounds(summary) else {
+            empty_state(
+                ui,
+                true,
+                "Aucune session horodatee visible dans cette periode.",
+                "Aucune session horodatee visible dans cette periode.",
+            );
+            return;
+        };
+
         let plot_response = Plot::new("bilans_cumulative_plot")
             .height(REPORT_CHART_HEIGHT)
             .allow_scroll(false)
@@ -2102,6 +2117,9 @@ impl MyApp {
             .label_formatter(|_, _| String::new())
             .x_axis_formatter(|mark, _, range| format_plot_time_mark(mark.value, range))
             .y_axis_formatter(|mark, _, _| format_plot_kamas_mark(mark.value))
+            .include_x(min_x)
+            .include_x(max_x)
+            .include_y(0.0)
             .show(ui, |plot_ui| {
                 for series in summary
                     .chart_series
@@ -2109,23 +2127,14 @@ impl MyApp {
                     .filter(|series| !series.points.is_empty())
                 {
                     let (_fill, stroke, text) = activity_kind_colors(series.kind);
-                    let mut line_points = Vec::new();
-
-                    if let Some(start_at) = summary.period_started_at {
-                        line_points.push([datetime_to_plot_x(start_at), 0.0]);
-                    }
-
-                    line_points.extend(series.points.iter().map(|point| {
-                        [
-                            datetime_to_plot_x(point.recorded_at),
-                            point.cumulative_value as f64,
-                        ]
-                    }));
 
                     plot_ui.line(
-                        Line::new(PlotPoints::from_iter(line_points.into_iter()))
-                            .color(stroke)
-                            .width(2.5),
+                        Line::new(PlotPoints::from_iter(
+                            build_cumulative_line_points(series, summary.period_started_at)
+                                .into_iter(),
+                        ))
+                        .color(stroke)
+                        .width(2.5),
                     );
                     plot_ui.points(
                         Points::new(PlotPoints::from_iter(series.points.iter().map(|point| {
@@ -4425,6 +4434,53 @@ fn plot_x_to_datetime(value: f64) -> Option<NaiveDateTime> {
         .map(|value| value.naive_utc())
 }
 
+fn build_cumulative_line_points(
+    series: &CategorySeries,
+    period_started_at: Option<NaiveDateTime>,
+) -> Vec<[f64; 2]> {
+    let mut line_points =
+        Vec::with_capacity(series.points.len() + usize::from(period_started_at.is_some()));
+
+    if let Some(start_at) = period_started_at {
+        line_points.push([datetime_to_plot_x(start_at), 0.0]);
+    }
+
+    line_points.extend(series.points.iter().map(|point| {
+        [
+            datetime_to_plot_x(point.recorded_at),
+            point.cumulative_value as f64,
+        ]
+    }));
+
+    line_points
+}
+
+fn cumulative_chart_x_bounds(summary: &ReportSummary) -> Option<(f64, f64)> {
+    let mut first_visible_at: Option<NaiveDateTime> = None;
+    let mut last_visible_at: Option<NaiveDateTime> = None;
+
+    for recorded_at in summary
+        .chart_series
+        .iter()
+        .flat_map(|series| series.points.iter().map(|point| point.recorded_at))
+    {
+        first_visible_at =
+            Some(first_visible_at.map_or(recorded_at, |current| current.min(recorded_at)));
+        last_visible_at =
+            Some(last_visible_at.map_or(recorded_at, |current| current.max(recorded_at)));
+    }
+
+    let first_visible_at = first_visible_at?;
+    let min_at = summary.period_started_at.unwrap_or(first_visible_at);
+    let mut max_at = last_visible_at?;
+
+    if max_at <= min_at {
+        max_at = min_at + chrono::Duration::seconds(60);
+    }
+
+    Some((datetime_to_plot_x(min_at), datetime_to_plot_x(max_at)))
+}
+
 fn format_plot_time_mark(value: f64, range: &std::ops::RangeInclusive<f64>) -> String {
     let Some(datetime) = plot_x_to_datetime(value) else {
         return String::new();
@@ -4868,7 +4924,44 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
 mod tests {
     use super::*;
     use crate::models::{DofusClass, DurationInput};
+    use crate::reports::{CategorySeries, CumulativePoint, ReportSummary};
     use crate::InlineEditState;
+    use chrono::NaiveDateTime;
+
+    fn dt(value: &str) -> NaiveDateTime {
+        NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").unwrap()
+    }
+
+    fn cumulative_point(recorded_at: &str, cumulative_value: f32) -> CumulativePoint {
+        CumulativePoint {
+            recorded_at: dt(recorded_at),
+            delta_value: cumulative_value,
+            cumulative_value,
+            sessions: Vec::new(),
+        }
+    }
+
+    fn summary_with_chart(
+        period_started_at: Option<NaiveDateTime>,
+        chart_series: Vec<CategorySeries>,
+    ) -> ReportSummary {
+        ReportSummary {
+            session_count: chart_series.iter().map(|series| series.session_count).sum(),
+            total_earned: chart_series
+                .iter()
+                .map(|series| series.total_in_period)
+                .sum(),
+            average_per_session: None,
+            best_session: None,
+            best_activity: None,
+            top_activities: Vec::new(),
+            class_summaries: Vec::new(),
+            recent_sessions: Vec::new(),
+            chart_series,
+            chart_bars: Vec::new(),
+            period_started_at,
+        }
+    }
 
     #[test]
     fn summarize_values_returns_best_average_and_count() {
@@ -5197,5 +5290,89 @@ mod tests {
             recommended_dungeon_class(&dungeons, "Blop"),
             Some(DofusClass::Cra)
         );
+    }
+
+    #[test]
+    fn cumulative_chart_all_time_single_point_uses_real_timestamp_bounds() {
+        let summary = summary_with_chart(
+            None,
+            vec![CategorySeries {
+                kind: ActivityKind::Zone,
+                points: vec![cumulative_point("2026-03-08 10:00", 120_000.0)],
+                total_in_period: 120_000.0,
+                session_count: 1,
+            }],
+        );
+
+        let (min_x, max_x) = cumulative_chart_x_bounds(&summary).unwrap();
+        let expected_x = datetime_to_plot_x(dt("2026-03-08 10:00"));
+
+        assert_eq!(min_x, expected_x);
+        assert!(max_x > min_x);
+        assert!(min_x > 1_000_000_000.0);
+    }
+
+    #[test]
+    fn cumulative_chart_all_time_multiple_points_has_no_artificial_zero_prefix() {
+        let series = CategorySeries {
+            kind: ActivityKind::Zone,
+            points: vec![
+                cumulative_point("2026-03-08 10:00", 120_000.0),
+                cumulative_point("2026-03-08 12:00", 200_000.0),
+            ],
+            total_in_period: 200_000.0,
+            session_count: 2,
+        };
+        let summary = summary_with_chart(None, vec![series.clone()]);
+
+        let (min_x, max_x) = cumulative_chart_x_bounds(&summary).unwrap();
+        let line_points = build_cumulative_line_points(&series, summary.period_started_at);
+
+        assert_eq!(min_x, datetime_to_plot_x(dt("2026-03-08 10:00")));
+        assert_eq!(max_x, datetime_to_plot_x(dt("2026-03-08 12:00")));
+        assert_eq!(line_points.len(), 2);
+        assert_eq!(
+            line_points[0],
+            [datetime_to_plot_x(dt("2026-03-08 10:00")), 120_000.0]
+        );
+    }
+
+    #[test]
+    fn cumulative_chart_rolling_period_prefixes_zero_at_period_start() {
+        let period_started_at = dt("2026-03-07 18:00");
+        let series = CategorySeries {
+            kind: ActivityKind::Zone,
+            points: vec![cumulative_point("2026-03-08 10:00", 120_000.0)],
+            total_in_period: 120_000.0,
+            session_count: 1,
+        };
+        let summary = summary_with_chart(Some(period_started_at), vec![series.clone()]);
+
+        let (min_x, max_x) = cumulative_chart_x_bounds(&summary).unwrap();
+        let line_points = build_cumulative_line_points(&series, summary.period_started_at);
+
+        assert_eq!(min_x, datetime_to_plot_x(period_started_at));
+        assert_eq!(max_x, datetime_to_plot_x(dt("2026-03-08 10:00")));
+        assert_eq!(line_points.len(), 2);
+        assert_eq!(line_points[0], [datetime_to_plot_x(period_started_at), 0.0]);
+        assert_eq!(
+            line_points[1],
+            [datetime_to_plot_x(dt("2026-03-08 10:00")), 120_000.0]
+        );
+    }
+
+    #[test]
+    fn cumulative_chart_bounds_return_none_when_all_series_are_empty() {
+        let summary = summary_with_chart(
+            None,
+            vec![CategorySeries {
+                kind: ActivityKind::Zone,
+                points: Vec::new(),
+                total_in_period: 0.0,
+                session_count: 0,
+            }],
+        );
+
+        assert_eq!(cumulative_chart_x_bounds(&summary), None);
     }
 }

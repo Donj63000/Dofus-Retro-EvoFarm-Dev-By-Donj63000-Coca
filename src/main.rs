@@ -10,14 +10,15 @@ mod ui;
 use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
 use image::imageops::FilterType;
 use models::{
-    AppData, ArenaEntry, ArenaForm, DofusClass, DungeonEntry, DungeonForm, DuoTrioEntry,
-    DuoTrioForm, DurationInput, Tab, ZoneEntry, ZoneForm,
+    AppData, ArenaEntry, ArenaForm, DofusClass, DraftState, DungeonEntry, DungeonForm,
+    DuoTrioEntry, DuoTrioForm, DurationInput, PersistedInlineEdit, PersistedState, Tab, ZoneEntry,
+    ZoneForm,
 };
 use reports::{ReportCategoryFilter, ReportPeriod};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-pub const APP_NAME: &str = "EvoFarm";
+pub const APP_NAME: &str = "MarkarthFarm";
 const APP_ICON_BYTES: &[u8] = include_bytes!("../icone/icone.png");
 const APP_ICON_SIZE: u32 = 256;
 const CLASS_CRA_BYTES: &[u8] = include_bytes!("../classes/cra.png");
@@ -118,8 +119,8 @@ pub struct MyApp {
     pub dungeon_delete_confirm: Option<usize>,
     pub duo_trio_delete_confirm: Option<usize>,
     pub arena_delete_confirm: Option<usize>,
-    pub show_clear_all_confirm: bool,
-    pub show_load_dialog: bool,
+    pub show_clear_state_confirm: bool,
+    pub show_delete_local_save_confirm: bool,
     pub show_load_confirm: bool,
     pub pending_load_action: Option<LoadAction>,
 }
@@ -160,8 +161,8 @@ impl Default for MyApp {
             dungeon_delete_confirm: None,
             duo_trio_delete_confirm: None,
             arena_delete_confirm: None,
-            show_clear_all_confirm: false,
-            show_load_dialog: false,
+            show_clear_state_confirm: false,
+            show_delete_local_save_confirm: false,
             show_load_confirm: false,
             pending_load_action: None,
         }
@@ -171,30 +172,46 @@ impl Default for MyApp {
 impl MyApp {
     pub fn load() -> Self {
         let mut app = Self::default();
-        let path = storage::data_file_path();
 
-        if !path.exists() {
+        if !storage::has_local_state() {
             return app;
         }
 
-        match storage::load_data() {
+        match storage::load_state() {
             Ok(result) => {
-                app.data = result.data;
+                let should_notify = result.used_backup
+                    || result.cleaned_legacy_entries > 0
+                    || result.state.drafts.has_any_draft();
+
+                let mut message = format!(
+                    "État local restauré. {}",
+                    persisted_state_summary(&result.state)
+                );
+
+                if result.used_backup {
+                    message.push_str(&format!(
+                        " Le fichier principal était indisponible ou invalide ; la sauvegarde de secours a été utilisée : {}",
+                        result.source_path.display()
+                    ));
+                }
 
                 if result.cleaned_legacy_entries > 0 {
-                    app.set_status(
-                        StatusKind::Info,
-                        format!(
-                            "{} ancienne(s) entree(s) legacy ont ete ignorees au chargement. La sauvegarde locale n'a pas ete reecrite automatiquement. Verifie les donnees affichees puis sauvegarde manuellement si tu veux ecrire une version nettoyee.",
-                            result.cleaned_legacy_entries
-                        ),
-                    );
+                    message.push_str(&format!(
+                        " {} entrée(s) legacy ont été ignorées au chargement.",
+                        result.cleaned_legacy_entries
+                    ));
+                }
+
+                app.apply_persisted_state(result.state);
+
+                if should_notify {
+                    app.set_status(StatusKind::Info, message);
                 }
             }
             Err(error) => {
                 app.set_status(
                     StatusKind::Error,
-                    format!("Impossible de charger les données enregistrées : {error}"),
+                    format!("Impossible de charger l'état local enregistré : {error}"),
                 );
             }
         }
@@ -221,26 +238,32 @@ impl MyApp {
     }
 
     pub fn save(&mut self) {
-        self.persist_with_status("Données sauvegardées.");
+        self.persist_with_status("État local sauvegardé.");
     }
 
-    pub fn open_load_dialog(&mut self) {
-        self.show_load_dialog = true;
+    pub fn open_clear_state_dialog(&mut self) {
+        self.show_clear_state_confirm = true;
     }
 
-    pub fn close_load_dialog(&mut self) {
-        self.show_load_dialog = false;
+    pub fn close_clear_state_dialog(&mut self) {
+        self.show_clear_state_confirm = false;
+    }
+
+    pub fn open_delete_local_save_dialog(&mut self) {
+        self.show_delete_local_save_confirm = true;
+    }
+
+    pub fn close_delete_local_save_dialog(&mut self) {
+        self.show_delete_local_save_confirm = false;
     }
 
     pub fn request_reload_local(&mut self) {
         self.pending_load_action = Some(LoadAction::ReloadLocal);
-        self.show_load_dialog = false;
         self.show_load_confirm = true;
     }
 
     pub fn request_import_external(&mut self, path: PathBuf) {
         self.pending_load_action = Some(LoadAction::ImportExternal(path));
-        self.show_load_dialog = false;
         self.show_load_confirm = true;
     }
 
@@ -253,16 +276,14 @@ impl MyApp {
         match self.pending_load_action.as_ref()? {
             LoadAction::ReloadLocal => Some((
                 "Recharger la sauvegarde locale".to_string(),
-                format!(
-                    "Cette action remplace les données actuellement affichées par la sauvegarde locale située ici : {}",
-                    storage::data_file_path().display()
-                ),
+                "Cette action remplace l'etat actuellement affiche (donnees et brouillons) par la derniere sauvegarde locale disponible."
+                    .to_string(),
                 "Charger".to_string(),
             )),
             LoadAction::ImportExternal(path) => Some((
                 "Importer un fichier JSON".to_string(),
                 format!(
-                    "Cette action remplace les données actuellement affichées avec le contenu de {} puis met à jour la sauvegarde locale de l'application.",
+                    "Cette action remplace l'etat actuellement affiche (donnees et brouillons) avec le contenu de {} puis met a jour la sauvegarde locale de l'application.",
                     path.display()
                 ),
                 "Importer".to_string(),
@@ -520,39 +541,31 @@ impl MyApp {
         }
     }
 
-    pub fn open_clear_all_dialog(&mut self) {
-        self.show_clear_all_confirm = true;
+    pub fn clear_current_state(&mut self) {
+        self.apply_persisted_state(PersistedState::default());
+        self.show_clear_state_confirm = false;
+        self.show_delete_local_save_confirm = false;
+        self.set_status(
+            StatusKind::Info,
+            "Etat courant efface. La sauvegarde locale n'a pas ete modifiee.",
+        );
     }
 
-    pub fn close_clear_all_dialog(&mut self) {
-        self.show_clear_all_confirm = false;
-    }
+    pub fn delete_local_save(&mut self) {
+        let had_local_state = storage::has_local_state();
+        self.show_delete_local_save_confirm = false;
 
-    pub fn clear_all(&mut self) {
-        self.data = AppData::default();
-        self.zone_form = ZoneForm::default();
-        self.dungeon_form = DungeonForm::default();
-        self.duo_trio_form = DuoTrioForm::default();
-        self.arena_form = ArenaForm::default();
-        self.zone_form_error = None;
-        self.dungeon_form_error = None;
-        self.duo_trio_form_error = None;
-        self.arena_form_error = None;
-        self.activity_search_time_touched = false;
-        self.activity_search_time_error = None;
-        self.zone_search.clear();
-        self.dungeon_search.clear();
-        self.duo_trio_search.clear();
-        self.arena_search.clear();
-        self.clear_zone_transient_state();
-        self.clear_dungeon_transient_state();
-        self.clear_duo_trio_transient_state();
-        self.clear_arena_transient_state();
-        self.show_clear_all_confirm = false;
-        self.show_load_dialog = false;
-        self.show_load_confirm = false;
-        self.pending_load_action = None;
-        self.persist_with_status("Toutes les données ont été effacées.");
+        match storage::delete_state() {
+            Ok(()) if had_local_state => self.set_status(
+                StatusKind::Success,
+                "Sauvegarde locale supprimee. Le fichier principal et sa sauvegarde de secours ont ete retires lorsqu'ils existaient.",
+            ),
+            Ok(()) => self.set_status(StatusKind::Info, "Aucune sauvegarde locale a supprimer."),
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible de supprimer la sauvegarde locale : {error}"),
+            ),
+        }
     }
 
     fn load_from_action(&mut self, action: LoadAction) {
@@ -565,35 +578,146 @@ impl MyApp {
         }
     }
 
-    fn reload_local_data(&mut self) {
-        let path = storage::data_file_path();
+    fn build_draft_state(&self) -> DraftState {
+        DraftState {
+            zone_form: self
+                .zone_form
+                .has_user_input()
+                .then(|| self.zone_form.clone()),
+            dungeon_form: self
+                .dungeon_form
+                .has_user_input()
+                .then(|| self.dungeon_form.clone()),
+            duo_trio_form: self
+                .duo_trio_form
+                .has_user_input()
+                .then(|| self.duo_trio_form.clone()),
+            arena_form: self
+                .arena_form
+                .has_user_input()
+                .then(|| self.arena_form.clone()),
+            zone_edit: self.zone_edit.as_ref().map(|edit| PersistedInlineEdit {
+                index: edit.index,
+                form: edit.form.clone(),
+            }),
+            dungeon_edit: self.dungeon_edit.as_ref().map(|edit| PersistedInlineEdit {
+                index: edit.index,
+                form: edit.form.clone(),
+            }),
+            duo_trio_edit: self.duo_trio_edit.as_ref().map(|edit| PersistedInlineEdit {
+                index: edit.index,
+                form: edit.form.clone(),
+            }),
+            arena_edit: self.arena_edit.as_ref().map(|edit| PersistedInlineEdit {
+                index: edit.index,
+                form: edit.form.clone(),
+            }),
+        }
+    }
 
-        if !path.exists() {
-            self.set_status(
-                StatusKind::Error,
-                format!("Aucune sauvegarde locale trouvée : {}", path.display()),
-            );
+    fn build_persisted_state(&self) -> PersistedState {
+        PersistedState {
+            data: self.data.clone(),
+            drafts: self.build_draft_state(),
+            ..PersistedState::default()
+        }
+    }
+
+    fn apply_persisted_state(&mut self, state: PersistedState) {
+        let PersistedState { data, drafts, .. } = state;
+        let DraftState {
+            zone_form,
+            dungeon_form,
+            duo_trio_form,
+            arena_form,
+            zone_edit,
+            dungeon_edit,
+            duo_trio_edit,
+            arena_edit,
+        } = drafts;
+
+        self.data = data;
+        self.zone_form = zone_form.unwrap_or_default();
+        self.dungeon_form = dungeon_form.unwrap_or_default();
+        self.duo_trio_form = duo_trio_form.unwrap_or_default();
+        self.arena_form = arena_form.unwrap_or_default();
+
+        self.zone_edit = zone_edit.map(|edit| InlineEditState {
+            index: edit.index,
+            form: edit.form,
+            error: None,
+        });
+        self.dungeon_edit = dungeon_edit.map(|edit| InlineEditState {
+            index: edit.index,
+            form: edit.form,
+            error: None,
+        });
+        self.duo_trio_edit = duo_trio_edit.map(|edit| InlineEditState {
+            index: edit.index,
+            form: edit.form,
+            error: None,
+        });
+        self.arena_edit = arena_edit.map(|edit| InlineEditState {
+            index: edit.index,
+            form: edit.form,
+            error: None,
+        });
+
+        self.reset_non_persisted_ui_state();
+    }
+
+    fn apply_persisted_state_and_focus(&mut self, state: PersistedState) {
+        self.apply_persisted_state(state);
+        self.focus_first_restored_tab();
+    }
+
+    fn focus_first_restored_tab(&mut self) {
+        let current_is_data_tab = matches!(
+            self.current_tab,
+            Tab::Zones | Tab::Donjons | Tab::DuoTrio | Tab::PlArene
+        );
+
+        if current_is_data_tab && self.tab_has_restored_content(self.current_tab) {
             return;
         }
 
-        match storage::load_data_from_path(&path) {
-            Ok(result) => {
-                let mut message =
-                    format!("Sauvegarde locale rechargée. Fichier : {}", path.display());
-                let status_kind = if result.cleaned_legacy_entries > 0 {
-                    message.push(' ');
-                    message.push_str(&format!(
-                        "{} ancienne(s) entrée(s) legacy ont été ignorées au rechargement. Le fichier local n'a pas été modifié automatiquement.",
-                        result.cleaned_legacy_entries
-                    ));
-                    StatusKind::Info
-                } else {
-                    StatusKind::Success
-                };
-
-                self.apply_loaded_data(result.data);
-                self.set_status(status_kind, message);
+        for tab in [Tab::Zones, Tab::Donjons, Tab::DuoTrio, Tab::PlArene] {
+            if self.tab_has_restored_content(tab) {
+                self.current_tab = tab;
+                return;
             }
+        }
+    }
+
+    fn tab_has_restored_content(&self, tab: Tab) -> bool {
+        match tab {
+            Tab::Zones => {
+                !self.data.zones.is_empty()
+                    || self.zone_form.has_user_input()
+                    || self.zone_edit.is_some()
+            }
+            Tab::Donjons => {
+                !self.data.dungeons.is_empty()
+                    || self.dungeon_form.has_user_input()
+                    || self.dungeon_edit.is_some()
+            }
+            Tab::DuoTrio => {
+                !self.data.duo_trios.is_empty()
+                    || self.duo_trio_form.has_user_input()
+                    || self.duo_trio_edit.is_some()
+            }
+            Tab::PlArene => {
+                !self.data.arenas.is_empty()
+                    || self.arena_form.has_user_input()
+                    || self.arena_edit.is_some()
+            }
+            Tab::Bilans | Tab::RechercheActivite => false,
+        }
+    }
+
+    fn reload_local_data(&mut self) {
+        match storage::load_state() {
+            Ok(result) => self.apply_reload_state_result(result),
             Err(error) => self.set_status(
                 StatusKind::Error,
                 format!("Impossible de recharger la sauvegarde locale : {error}"),
@@ -601,34 +725,77 @@ impl MyApp {
         }
     }
 
+    fn reload_local_data_from_path(&mut self, path: &Path) {
+        match storage::load_state_from_path(path) {
+            Ok(result) => self.apply_reload_state_result(result),
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible de recharger la sauvegarde locale : {error}"),
+            ),
+        }
+    }
+
+    fn apply_reload_state_result(&mut self, result: storage::LoadStateResult) {
+        let mut status_kind = StatusKind::Success;
+        let mut message = format!(
+            "Sauvegarde locale rechargée. {} Fichier : {}",
+            persisted_state_summary(&result.state),
+            result.source_path.display()
+        );
+
+        if result.used_backup {
+            status_kind = StatusKind::Info;
+            message.push_str(" Le fichier principal était indisponible ou invalide ; la sauvegarde de secours .bak a été utilisée.");
+        }
+
+        if result.cleaned_legacy_entries > 0 {
+            status_kind = StatusKind::Info;
+            message.push_str(&format!(
+                " {} entrée(s) legacy ont été ignorées au rechargement.",
+                result.cleaned_legacy_entries
+            ));
+        }
+
+        self.apply_persisted_state_and_focus(result.state);
+        self.set_status(status_kind, message);
+    }
+
     fn import_from_path_to_save_path(&mut self, source_path: &Path, save_path: &Path) {
-        match storage::load_data_from_path(source_path) {
-            Ok(result) => match storage::save_data_to_path(&result.data, save_path) {
-                Ok(saved_path) => {
+        match storage::load_state_from_path(source_path) {
+            Ok(result) => match storage::save_state_to_path(&result.state, save_path) {
+                Ok(saved) => {
                     let mut message = format!(
-                        "Import réussi. Source : {}. Sauvegarde locale mise à jour : {}",
-                        source_path.display(),
-                        saved_path.display()
+                        "Import réussi. {} Source : {}. Sauvegarde locale mise à jour : {}",
+                        persisted_state_summary(&result.state),
+                        result.source_path.display(),
+                        saved.path.display()
                     );
 
+                    if result.used_backup {
+                        message.push_str(" La version .bak du fichier importé a été utilisée.");
+                    }
+
                     if result.cleaned_legacy_entries > 0 {
-                        message.push(' ');
                         message.push_str(&format!(
-                            "{} ancienne(s) entrée(s) legacy ont été retirées lors de l'import.",
+                            " {} entrée(s) legacy ont été retirées pendant l'import.",
                             result.cleaned_legacy_entries
                         ));
                     }
 
-                    message.push_str(
-                        " Une sauvegarde .bak de l'ancien fichier local a été créée lorsqu'un fichier existait déjà.",
-                    );
+                    if saved.backup_path.is_some() {
+                        message.push_str(
+                            " Une sauvegarde de secours de l'ancien fichier local a été créée.",
+                        );
+                    }
 
-                    self.apply_loaded_data(result.data);
+                    self.apply_persisted_state_and_focus(result.state);
                     self.set_status(StatusKind::Success, message);
                 }
                 Err(error) => self.set_status(
                     StatusKind::Error,
-                    format!("Import impossible : sauvegarde locale non mise à jour ({error})."),
+                    format!(
+                        "Import impossible : la sauvegarde locale n'a pas été mise à jour ({error})."
+                    ),
                 ),
             },
             Err(error) => self.set_status(
@@ -650,10 +817,21 @@ impl MyApp {
     }
 
     fn persist_with_status(&mut self, success_message: &str) {
-        match storage::save_data(&self.data) {
-            Ok(path) => self.set_status(
+        let path = storage::data_file_path();
+        self.persist_with_status_to_path(success_message, &path);
+    }
+
+    fn persist_with_status_to_path(&mut self, success_message: &str, path: &Path) {
+        let state = self.build_persisted_state();
+
+        match storage::save_state_to_path(&state, path) {
+            Ok(result) => self.set_status(
                 StatusKind::Success,
-                format!("{success_message} Fichier : {}", path.display()),
+                format!(
+                    "{success_message} {} Fichier : {}",
+                    persisted_state_summary(&state),
+                    result.path.display()
+                ),
             ),
             Err(error) => {
                 self.set_status(StatusKind::Error, format!("Erreur de sauvegarde : {error}"))
@@ -681,16 +859,7 @@ impl MyApp {
         self.arena_delete_confirm = None;
     }
 
-    fn apply_loaded_data(&mut self, data: AppData) {
-        self.data = data;
-        self.reset_loaded_ui_state();
-    }
-
-    fn reset_loaded_ui_state(&mut self) {
-        self.zone_form = ZoneForm::default();
-        self.dungeon_form = DungeonForm::default();
-        self.duo_trio_form = DuoTrioForm::default();
-        self.arena_form = ArenaForm::default();
+    fn reset_non_persisted_ui_state(&mut self) {
         self.zone_form_error = None;
         self.dungeon_form_error = None;
         self.duo_trio_form_error = None;
@@ -701,15 +870,43 @@ impl MyApp {
         self.dungeon_search.clear();
         self.duo_trio_search.clear();
         self.arena_search.clear();
-        self.clear_zone_transient_state();
-        self.clear_dungeon_transient_state();
-        self.clear_duo_trio_transient_state();
-        self.clear_arena_transient_state();
-        self.show_clear_all_confirm = false;
-        self.show_load_dialog = false;
+        self.zone_delete_confirm = None;
+        self.dungeon_delete_confirm = None;
+        self.duo_trio_delete_confirm = None;
+        self.arena_delete_confirm = None;
+        self.show_clear_state_confirm = false;
+        self.show_delete_local_save_confirm = false;
         self.show_load_confirm = false;
         self.pending_load_action = None;
     }
+}
+
+fn persisted_state_summary(state: &PersistedState) -> String {
+    let draft_count = state.drafts.restored_items_count();
+
+    let has_data = !state.data.zones.is_empty()
+        || !state.data.dungeons.is_empty()
+        || !state.data.duo_trios.is_empty()
+        || !state.data.arenas.is_empty();
+
+    if !has_data && draft_count == 0 {
+        return "La sauvegarde est vide.".to_string();
+    }
+
+    let mut message = format!(
+        "Résumé : {} zone(s), {} donjon(s), {} run(s) duo/trio, {} session(s) PL arène",
+        state.data.zones.len(),
+        state.data.dungeons.len(),
+        state.data.duo_trios.len(),
+        state.data.arenas.len(),
+    );
+
+    if draft_count > 0 {
+        message.push_str(&format!(", {draft_count} brouillon(s)"));
+    }
+
+    message.push('.');
+    message
 }
 
 impl eframe::App for MyApp {
@@ -971,9 +1168,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{DofusClass, DurationInput, PartyMode};
+    use crate::models::{
+        DofusClass, DraftState, DurationInput, PartyMode, PersistedInlineEdit, PersistedState,
+    };
     use chrono::NaiveDateTime;
-    use std::path::PathBuf;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn dt(value: &str) -> NaiveDateTime {
         NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").unwrap()
@@ -1001,8 +1202,47 @@ mod tests {
         }
     }
 
+    fn temp_state_path(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("markarthfarm-main-{name}-{unique}.json"))
+    }
+
+    fn backup_path_for(path: &Path) -> PathBuf {
+        let file_name = path.file_name().and_then(|name| name.to_str()).unwrap();
+        path.with_file_name(format!("{file_name}.bak"))
+    }
+
+    fn cleanup_temp_state(path: &Path) {
+        let _ = fs::remove_file(path);
+        let _ = fs::remove_file(backup_path_for(path));
+    }
+
+    fn sample_dungeon_draft() -> DungeonForm {
+        DungeonForm {
+            name: "Draft Blop".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            run_time: duration_input("00", "20", "00"),
+            gross_kamas_per_run: "120000".to_string(),
+            key_price: "15000".to_string(),
+        }
+    }
+
+    fn sample_zone_draft() -> ZoneForm {
+        ZoneForm {
+            name: "Brouillon zone".to_string(),
+            character_class: Some(DofusClass::Cra),
+            recorded_at_input: "2026-03-08 14:45".to_string(),
+            session_time: duration_input("01", "10", "00"),
+            session_total_kamas: "250000".to_string(),
+        }
+    }
+
     #[test]
-    fn apply_loaded_data_resets_transient_ui_state() {
+    fn apply_persisted_state_resets_transient_ui_state() {
         let mut app = MyApp {
             current_tab: Tab::Donjons,
             ..Default::default()
@@ -1047,12 +1287,15 @@ mod tests {
         app.dungeon_delete_confirm = Some(0);
         app.duo_trio_delete_confirm = Some(0);
         app.arena_delete_confirm = Some(0);
-        app.show_clear_all_confirm = true;
-        app.show_load_dialog = true;
+        app.show_clear_state_confirm = true;
+        app.show_delete_local_save_confirm = true;
         app.show_load_confirm = true;
         app.pending_load_action = Some(LoadAction::ReloadLocal);
 
-        app.apply_loaded_data(sample_loaded_data());
+        app.apply_persisted_state(PersistedState {
+            data: sample_loaded_data(),
+            ..PersistedState::default()
+        });
 
         assert_eq!(app.current_tab, Tab::Donjons);
         assert_eq!(app.data.zones.len(), 1);
@@ -1080,10 +1323,220 @@ mod tests {
         assert!(app.dungeon_delete_confirm.is_none());
         assert!(app.duo_trio_delete_confirm.is_none());
         assert!(app.arena_delete_confirm.is_none());
-        assert!(!app.show_clear_all_confirm);
-        assert!(!app.show_load_dialog);
+        assert!(!app.show_clear_state_confirm);
+        assert!(!app.show_delete_local_save_confirm);
         assert!(!app.show_load_confirm);
         assert!(app.pending_load_action.is_none());
+    }
+
+    #[test]
+    fn clear_current_state_clears_memory_only() {
+        let mut app = MyApp {
+            data: sample_loaded_data(),
+            zone_form: ZoneForm {
+                name: "Brouillon".to_string(),
+                ..ZoneForm::default()
+            },
+            zone_edit: Some(InlineEditState {
+                index: 0,
+                form: ZoneForm {
+                    name: "Edition".to_string(),
+                    ..ZoneForm::default()
+                },
+                error: Some("edit".to_string()),
+            }),
+            show_clear_state_confirm: true,
+            show_delete_local_save_confirm: true,
+            show_load_confirm: true,
+            pending_load_action: Some(LoadAction::ReloadLocal),
+            ..Default::default()
+        };
+
+        app.clear_current_state();
+
+        assert!(app.data.zones.is_empty());
+        assert!(app.zone_form.name.is_empty());
+        assert!(app.zone_edit.is_none());
+        assert!(!app.show_clear_state_confirm);
+        assert!(!app.show_delete_local_save_confirm);
+        assert!(!app.show_load_confirm);
+        assert!(app.pending_load_action.is_none());
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Info)
+        ));
+    }
+
+    #[test]
+    fn persist_with_status_to_path_saves_data_and_drafts() {
+        let path = temp_state_path("persist-with-status");
+        let mut app = MyApp {
+            data: sample_loaded_data(),
+            dungeon_form: sample_dungeon_draft(),
+            ..Default::default()
+        };
+
+        app.persist_with_status_to_path("Etat local sauvegarde.", &path);
+
+        let reloaded = storage::load_state_from_path(&path).unwrap();
+
+        assert_eq!(reloaded.state.data.zones.len(), 1);
+        assert_eq!(
+            reloaded.state.drafts.dungeon_form.as_ref().unwrap().name,
+            "Draft Blop"
+        );
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("1 brouillon(s)"));
+
+        cleanup_temp_state(&path);
+    }
+
+    #[test]
+    fn reload_local_data_from_path_restores_saved_state_after_clear() {
+        let path = temp_state_path("reload-after-clear");
+        let state = PersistedState {
+            data: sample_loaded_data(),
+            drafts: DraftState {
+                dungeon_form: Some(sample_dungeon_draft()),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+        storage::save_state_to_path(&state, &path).unwrap();
+
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            data: sample_loaded_data(),
+            ..Default::default()
+        };
+
+        app.clear_current_state();
+        assert!(app.data.zones.is_empty());
+
+        app.reload_local_data_from_path(&path);
+
+        assert_eq!(app.current_tab, Tab::Zones);
+        assert_eq!(app.data.zones.len(), 1);
+        assert_eq!(app.dungeon_form.name, "Draft Blop");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("Sauvegarde locale rechargée."));
+
+        cleanup_temp_state(&path);
+    }
+
+    #[test]
+    fn reload_local_data_from_path_uses_backup_and_reports_it() {
+        let path = temp_state_path("reload-backup");
+        let backup_path = backup_path_for(&path);
+        let state = PersistedState {
+            drafts: DraftState {
+                zone_form: Some(sample_zone_draft()),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+
+        fs::write(&path, "{ invalid json }").unwrap();
+        fs::write(&backup_path, serde_json::to_string_pretty(&state).unwrap()).unwrap();
+
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            ..Default::default()
+        };
+
+        app.reload_local_data_from_path(&path);
+
+        assert_eq!(app.current_tab, Tab::Zones);
+        assert_eq!(app.zone_form.name, "Brouillon zone");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Info)
+        ));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains(".bak a été utilisée"));
+
+        cleanup_temp_state(&path);
+    }
+
+    #[test]
+    fn reload_local_data_from_path_keeps_current_state_on_error() {
+        let path = temp_state_path("reload-missing");
+        let mut app = MyApp {
+            data: sample_loaded_data(),
+            zone_form: sample_zone_draft(),
+            current_tab: Tab::Donjons,
+            ..Default::default()
+        };
+
+        app.reload_local_data_from_path(&path);
+
+        assert_eq!(app.current_tab, Tab::Donjons);
+        assert_eq!(app.data.zones.len(), 1);
+        assert_eq!(app.zone_form.name, "Brouillon zone");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Error)
+        ));
+    }
+
+    #[test]
+    fn apply_persisted_state_restores_drafts_and_inline_edits() {
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            activity_search_class: Some(DofusClass::Cra),
+            activity_search_time: duration_input("01", "15", "00"),
+            activity_search_time_touched: true,
+            activity_search_time_error: Some("temps".to_string()),
+            ..Default::default()
+        };
+
+        let zone_draft = sample_zone_draft();
+
+        let state = PersistedState {
+            data: sample_loaded_data(),
+            drafts: DraftState {
+                zone_form: Some(zone_draft.clone()),
+                zone_edit: Some(PersistedInlineEdit {
+                    index: 0,
+                    form: zone_draft.clone(),
+                }),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+
+        app.apply_persisted_state_and_focus(state);
+
+        assert_eq!(app.current_tab, Tab::Zones);
+        assert_eq!(app.zone_form.name, "Brouillon zone");
+        assert!(app.zone_edit.is_some());
+        assert_eq!(app.zone_edit.as_ref().unwrap().index, 0);
+        assert_eq!(app.zone_edit.as_ref().unwrap().form.name, "Brouillon zone");
+        assert!(app.zone_edit.as_ref().unwrap().error.is_none());
+        assert_eq!(app.activity_search_class, Some(DofusClass::Cra));
+        assert_eq!(app.activity_search_time, duration_input("01", "15", "00"));
+        assert!(!app.activity_search_time_touched);
+        assert!(app.activity_search_time_error.is_none());
     }
 
     #[test]
@@ -1094,7 +1547,7 @@ mod tests {
         };
 
         app.load_from_action(LoadAction::ImportExternal(PathBuf::from(
-            "C:\\missing\\evofarm.json",
+            "C:\\missing\\markarthfarm.json",
         )));
 
         assert_eq!(app.data.zones.len(), 1);
@@ -1103,6 +1556,112 @@ mod tests {
             app.status.as_ref().map(|status| status.kind),
             Some(StatusKind::Error)
         ));
+    }
+
+    #[test]
+    fn import_from_path_to_save_path_restores_state_and_creates_backup() {
+        let source_path = temp_state_path("import-source");
+        let target_path = temp_state_path("import-target");
+        let target_backup_path = backup_path_for(&target_path);
+        let state = PersistedState {
+            data: sample_loaded_data(),
+            drafts: DraftState {
+                zone_form: Some(sample_zone_draft()),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+
+        storage::save_state_to_path(&state, &source_path).unwrap();
+        fs::write(&target_path, r#"{"marker":"ancienne-version"}"#).unwrap();
+
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            ..Default::default()
+        };
+
+        app.import_from_path_to_save_path(&source_path, &target_path);
+
+        let imported = storage::load_state_from_path(&target_path).unwrap();
+
+        assert_eq!(app.current_tab, Tab::Zones);
+        assert_eq!(imported.state.data.zones.len(), 1);
+        assert_eq!(
+            imported.state.drafts.zone_form.as_ref().unwrap().name,
+            "Brouillon zone"
+        );
+        assert!(target_backup_path.exists());
+        assert!(fs::read_to_string(&target_backup_path)
+            .unwrap()
+            .contains("ancienne-version"));
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("Import réussi."));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("sauvegarde de secours"));
+
+        cleanup_temp_state(&source_path);
+        cleanup_temp_state(&target_path);
+    }
+
+    #[test]
+    fn import_from_path_to_save_path_uses_backup_source_when_needed() {
+        let source_path = temp_state_path("import-source-backup");
+        let source_backup_path = backup_path_for(&source_path);
+        let target_path = temp_state_path("import-target-backup");
+        let state = PersistedState {
+            drafts: DraftState {
+                dungeon_form: Some(sample_dungeon_draft()),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+
+        fs::write(&source_path, "{ invalid json }").unwrap();
+        fs::write(
+            &source_backup_path,
+            serde_json::to_string_pretty(&state).unwrap(),
+        )
+        .unwrap();
+
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            ..Default::default()
+        };
+
+        app.import_from_path_to_save_path(&source_path, &target_path);
+
+        let imported = storage::load_state_from_path(&target_path).unwrap();
+
+        assert_eq!(app.current_tab, Tab::Donjons);
+        assert_eq!(
+            imported.state.drafts.dungeon_form.as_ref().unwrap().name,
+            "Draft Blop"
+        );
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+        assert!(app
+            .status
+            .as_ref()
+            .unwrap()
+            .message
+            .contains(".bak du fichier importé a été utilisée"));
+
+        cleanup_temp_state(&source_path);
+        cleanup_temp_state(&target_path);
     }
 
     #[test]
