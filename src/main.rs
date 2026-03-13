@@ -18,7 +18,7 @@ use reports::{ReportCategoryFilter, ReportPeriod};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-pub const APP_NAME: &str = "MarkarthFarm";
+pub const APP_NAME: &str = "EvoFarm";
 const APP_ICON_BYTES: &[u8] = include_bytes!("../icone/icone.png");
 const APP_ICON_SIZE: u32 = 256;
 const CLASS_CRA_BYTES: &[u8] = include_bytes!("../classes/cra.png");
@@ -1207,7 +1207,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("markarthfarm-main-{name}-{unique}.json"))
+        std::env::temp_dir().join(format!("evofarm-main-{name}-{unique}.json"))
     }
 
     fn backup_path_for(path: &Path) -> PathBuf {
@@ -1547,7 +1547,7 @@ mod tests {
         };
 
         app.load_from_action(LoadAction::ImportExternal(PathBuf::from(
-            "C:\\missing\\markarthfarm.json",
+            "C:\\missing\\evofarm.json",
         )));
 
         assert_eq!(app.data.zones.len(), 1);

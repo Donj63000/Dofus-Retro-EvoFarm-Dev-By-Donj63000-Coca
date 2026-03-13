@@ -36,7 +36,7 @@ fn compile_windows_resources() -> Result<(), Box<dyn Error>> {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
     let icon_path = manifest_dir.join("icone").join("icone.png");
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
-    let ico_path = out_dir.join("markarthfarm.ico");
+    let ico_path = out_dir.join("evofarm.ico");
 
     create_ico(&icon_path, &ico_path)?;
 

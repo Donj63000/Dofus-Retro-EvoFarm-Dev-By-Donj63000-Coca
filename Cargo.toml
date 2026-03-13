@@ -1,13 +1,13 @@
 [package]
-name = "markarthfarm"
+name = "evofarm"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
 [package.metadata.winres]
-ProductName = "MarkarthFarm"
-FileDescription = "MarkarthFarm"
-OriginalFilename = "MarkarthFarm.exe"
+ProductName = "EvoFarm"
+FileDescription = "EvoFarm"
+OriginalFilename = "EvoFarm.exe"
 
 [dependencies]
 eframe = "0.27"

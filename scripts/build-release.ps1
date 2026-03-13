@@ -2,9 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $projectRoot "Cargo.toml"
-$sourceExe = Join-Path $projectRoot "target\\release\\markarthfarm.exe"
-$targetExe = Join-Path $projectRoot "MarkarthFarm.exe"
-$zipPath = Join-Path $projectRoot "MarkarthFarm.zip"
+$sourceExe = Join-Path $projectRoot "target\\release\\evofarm.exe"
+$targetExe = Join-Path $projectRoot "EvoFarm.exe"
+$zipPath = Join-Path $projectRoot "EvoFarm.zip"
 $zipItems = @(
     "src",
     "classes",
@@ -16,7 +16,7 @@ $zipItems = @(
     "build.rs",
     "README.txt",
     ".gitignore",
-    "MarkarthFarm.exe"
+    "EvoFarm.exe"
 )
 
 & cargo build --manifest-path $manifestPath --release
@@ -25,9 +25,9 @@ if (-not (Test-Path $sourceExe)) {
     throw "Build succeeded but $sourceExe was not found."
 }
 
-$runningProcess = Get-Process MarkarthFarm -ErrorAction SilentlyContinue
+$runningProcess = Get-Process EvoFarm -ErrorAction SilentlyContinue
 if ($runningProcess) {
-    throw "MarkarthFarm.exe est en cours d'utilisation. Fermez l'application avant de relancer le packaging."
+    throw "EvoFarm.exe est en cours d'utilisation. Fermez l'application avant de relancer le packaging."
 }
 
 Copy-Item $sourceExe $targetExe -Force

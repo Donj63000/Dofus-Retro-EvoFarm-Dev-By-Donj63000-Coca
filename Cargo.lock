@@ -1268,6 +1268,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "evofarm"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dirs",
+ "eframe",
+ "egui",
+ "egui_plot",
+ "image 0.25.9",
+ "rfd",
+ "serde",
+ "serde_json",
+ "winres",
+]
+
+[[package]]
 name = "fastrand"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2074,22 +2090,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "markarthfarm"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs",
- "eframe",
- "egui",
- "egui_plot",
- "image 0.25.9",
- "rfd",
- "serde",
- "serde_json",
- "winres",
 ]
 
 [[package]]

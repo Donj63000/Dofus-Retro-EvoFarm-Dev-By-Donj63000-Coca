@@ -38,12 +38,12 @@ pub fn data_backup_path() -> PathBuf {
 
 pub fn has_local_state() -> bool {
     let preferred_path = preferred_data_file_path();
-    let legacy_path = legacy_data_file_path();
 
     preferred_path.exists()
         || data_backup_path().exists()
-        || legacy_path.exists()
-        || backup_path_for(&legacy_path).exists()
+        || legacy_data_file_paths()
+            .into_iter()
+            .any(|legacy_path| legacy_path.exists() || backup_path_for(&legacy_path).exists())
 }
 
 #[allow(dead_code)]
@@ -91,11 +91,12 @@ pub fn load_state() -> Result<LoadStateResult, String> {
         return load_state_from_path(&preferred_path);
     }
 
-    let legacy_path = legacy_data_file_path();
-    let legacy_backup = backup_path_for(&legacy_path);
+    for legacy_path in legacy_data_file_paths() {
+        let legacy_backup = backup_path_for(&legacy_path);
 
-    if legacy_path.exists() || legacy_backup.exists() {
-        return load_state_from_path(&legacy_path);
+        if legacy_path.exists() || legacy_backup.exists() {
+            return load_state_from_path(&legacy_path);
+        }
     }
 
     load_state_from_path(&preferred_path)
@@ -140,8 +141,11 @@ pub fn delete_state() -> Result<(), String> {
     let preferred_path = preferred_data_file_path();
     delete_state_at_path(&preferred_path)?;
 
-    let legacy_path = legacy_data_file_path();
-    if legacy_path != preferred_path {
+    for legacy_path in legacy_data_file_paths() {
+        if legacy_path == preferred_path {
+            continue;
+        }
+
         delete_state_at_path(&legacy_path)?;
     }
 
@@ -184,11 +188,14 @@ fn parse_data(content: &str) -> Result<LoadDataResult, String> {
 }
 
 fn preferred_data_file_path() -> PathBuf {
-    app_data_file_path("MarkarthFarm")
+    app_data_file_path("EvoFarm")
 }
 
-fn legacy_data_file_path() -> PathBuf {
-    app_data_file_path("dofus_rentabilite")
+fn legacy_data_file_paths() -> Vec<PathBuf> {
+    vec![
+        app_data_file_path("MarkarthFarm"),
+        app_data_file_path("dofus_rentabilite"),
+    ]
 }
 
 fn app_data_file_path(app_directory: &str) -> PathBuf {
@@ -637,7 +644,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("markarthfarm-{name}-{unique}.json"))
+        std::env::temp_dir().join(format!("evofarm-{name}-{unique}.json"))
     }
 
     fn cleanup_temp_state(path: &Path) {
