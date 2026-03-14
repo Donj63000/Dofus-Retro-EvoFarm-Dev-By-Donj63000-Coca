@@ -40,6 +40,9 @@ const CARD_HEADER_STACK_BREAKPOINT: f32 = 720.0;
 const CARD_COMPACT_METRICS_BREAKPOINT: f32 = 980.0;
 const ACTIVITY_CARD_COMPACT_BREAKPOINT: f32 = 1_120.0;
 const HEADER_LOGO_SIZE: f32 = 52.0;
+const HEADER_BRAND_TITLE_SIZE: f32 = 30.0;
+const HEADER_BRAND_ANIMATION_SPEED: f32 = 0.42;
+const HEADER_BRAND_CHARACTER_OFFSET: f32 = 0.14;
 
 #[derive(Default)]
 struct DurationInputResponse {
@@ -1103,31 +1106,7 @@ impl MyApp {
                                 }
 
                                 ui.vertical(|ui| {
-                                    let brand_root =
-                                        APP_NAME.strip_suffix("Farm").unwrap_or(APP_NAME);
-
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(brand_root)
-                                                .size(24.0)
-                                                .strong()
-                                                .color(colors.text_primary),
-                                        );
-
-                                        egui::Frame::none()
-                                            .fill(colors.accent_soft)
-                                            .stroke(egui::Stroke::new(1.0, colors.accent))
-                                            .rounding(999.0)
-                                            .inner_margin(egui::Margin::symmetric(10.0, 4.0))
-                                            .show(ui, |ui| {
-                                                ui.label(
-                                                    egui::RichText::new("Farm")
-                                                        .size(13.0)
-                                                        .strong()
-                                                        .color(colors.accent),
-                                                );
-                                            });
-                                    });
+                                    render_brand_title(ui, APP_NAME);
                                 });
                             });
 
@@ -4111,6 +4090,107 @@ fn paint_background(ctx: &egui::Context, texture: Option<&egui::TextureHandle>) 
         0.0,
         egui::Color32::from_rgba_unmultiplied(18, 22, 27, 88),
     );
+}
+
+fn render_brand_title(ui: &mut egui::Ui, title: &str) {
+    let time = ui.input(|input| input.time) as f32;
+    let border_color = with_alpha(brand_title_color(time, 0.18), 170);
+    let fill_color = with_alpha(brand_title_color(time, 0.62), 28);
+
+    ui.ctx()
+        .request_repaint_after(std::time::Duration::from_millis(33));
+
+    egui::Frame::none()
+        .fill(fill_color)
+        .stroke(egui::Stroke::new(1.0, border_color))
+        .rounding(16.0)
+        .inner_margin(egui::Margin::symmetric(16.0, 10.0))
+        .show(ui, |ui| {
+            let galley = ui.painter().layout_job(build_brand_title_job(ui, title, time));
+            let desired_size = galley.size() + egui::vec2(0.0, 8.0);
+            let (rect, _) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
+            let text_pos = rect.left_top();
+            let painter = ui.painter();
+
+            painter.galley_with_override_text_color(
+                text_pos + egui::vec2(0.0, 2.0),
+                galley.clone(),
+                egui::Color32::from_rgba_unmultiplied(6, 8, 12, 190),
+            );
+            painter.galley(text_pos, galley, egui::Color32::WHITE);
+            painter.line_segment(
+                [
+                    egui::pos2(rect.left() + 2.0, rect.bottom() - 1.0),
+                    egui::pos2(rect.right() - 2.0, rect.bottom() - 1.0),
+                ],
+                egui::Stroke::new(2.0, brand_title_color(time, 0.48)),
+            );
+        });
+}
+
+fn build_brand_title_job(ui: &egui::Ui, title: &str, time: f32) -> egui::text::LayoutJob {
+    let mut font_id = egui::TextStyle::Heading.resolve(ui.style());
+    font_id.size = HEADER_BRAND_TITLE_SIZE;
+
+    let mut job = egui::text::LayoutJob::default();
+
+    for (index, character) in title.chars().enumerate() {
+        egui::RichText::new(character.to_string())
+            .font(font_id.clone())
+            .strong()
+            .color(brand_title_color(
+                time,
+                index as f32 * HEADER_BRAND_CHARACTER_OFFSET,
+            ))
+            .append_to(
+                &mut job,
+                ui.style().as_ref(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            );
+    }
+
+    job
+}
+
+fn brand_title_color(time: f32, phase_offset: f32) -> egui::Color32 {
+    let palette = [
+        egui::Color32::from_rgb(89, 168, 255),
+        egui::Color32::from_rgb(155, 102, 255),
+        egui::Color32::from_rgb(255, 94, 107),
+        egui::Color32::from_rgb(255, 213, 79),
+    ];
+    let palette_len = palette.len() as f32;
+    let progress = (time * HEADER_BRAND_ANIMATION_SPEED + phase_offset).rem_euclid(palette_len);
+    let current = progress.floor() as usize;
+    let next = (current + 1) % palette.len();
+    let blend = smoothstep(progress.fract());
+
+    lerp_color(palette[current], palette[next], blend)
+}
+
+fn lerp_color(start: egui::Color32, end: egui::Color32, t: f32) -> egui::Color32 {
+    let mix = |from: u8, to: u8| -> u8 {
+        (from as f32 + (to as f32 - from as f32) * t)
+            .round()
+            .clamp(0.0, 255.0) as u8
+    };
+
+    egui::Color32::from_rgba_unmultiplied(
+        mix(start.r(), end.r()),
+        mix(start.g(), end.g()),
+        mix(start.b(), end.b()),
+        mix(start.a(), end.a()),
+    )
+}
+
+fn smoothstep(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn with_alpha(color: egui::Color32, alpha: u8) -> egui::Color32 {
+    egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha)
 }
 
 fn themed_button_widget(
