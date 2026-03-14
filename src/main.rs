@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod calculations;
@@ -85,6 +86,29 @@ pub enum LoadAction {
     ImportExternal(PathBuf),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NamedSaveConfirmAction {
+    Load {
+        save_id: String,
+        display_name: String,
+    },
+    Overwrite {
+        save_id: String,
+        display_name: String,
+    },
+    Delete {
+        save_id: String,
+        display_name: String,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NamedSaveRenameState {
+    pub save_id: String,
+    pub value: String,
+    pub error: Option<String>,
+}
+
 pub struct MyApp {
     pub data: AppData,
     pub current_tab: Tab,
@@ -123,6 +147,15 @@ pub struct MyApp {
     pub show_delete_local_save_confirm: bool,
     pub show_load_confirm: bool,
     pub pending_load_action: Option<LoadAction>,
+    pub show_named_save_dialog: bool,
+    pub show_named_load_dialog: bool,
+    pub show_named_save_confirm: bool,
+    pub pending_named_save_confirm_action: Option<NamedSaveConfirmAction>,
+    pub named_save_name_input: String,
+    pub named_save_error: Option<String>,
+    pub named_saves: Vec<storage::NamedSaveSummary>,
+    pub named_saves_error: Option<String>,
+    pub named_save_rename: Option<NamedSaveRenameState>,
 }
 
 impl Default for MyApp {
@@ -165,6 +198,15 @@ impl Default for MyApp {
             show_delete_local_save_confirm: false,
             show_load_confirm: false,
             pending_load_action: None,
+            show_named_save_dialog: false,
+            show_named_load_dialog: false,
+            show_named_save_confirm: false,
+            pending_named_save_confirm_action: None,
+            named_save_name_input: String::new(),
+            named_save_error: None,
+            named_saves: Vec::new(),
+            named_saves_error: None,
+            named_save_rename: None,
         }
     }
 }
@@ -296,6 +338,234 @@ impl MyApp {
 
         if let Some(action) = self.pending_load_action.take() {
             self.load_from_action(action);
+        }
+    }
+
+    pub fn open_named_save_dialog(&mut self) {
+        self.show_named_save_dialog = true;
+        self.show_named_load_dialog = false;
+        self.show_named_save_confirm = false;
+        self.pending_named_save_confirm_action = None;
+        self.named_save_name_input.clear();
+        self.named_save_error = None;
+        self.named_save_rename = None;
+    }
+
+    pub fn close_named_save_dialog(&mut self) {
+        self.show_named_save_dialog = false;
+        self.show_named_save_confirm = false;
+        self.pending_named_save_confirm_action = None;
+        self.named_save_error = None;
+        self.named_save_name_input.clear();
+    }
+
+    pub fn open_named_load_dialog(&mut self) {
+        let save_directory = storage::named_saves_dir_path();
+        let _ = self.refresh_named_saves_from_dir(&save_directory);
+        self.show_named_load_dialog = true;
+        self.show_named_save_dialog = false;
+        self.show_named_save_confirm = false;
+        self.pending_named_save_confirm_action = None;
+        self.named_save_error = None;
+        self.named_save_rename = None;
+    }
+
+    pub fn close_named_load_dialog(&mut self) {
+        self.show_named_load_dialog = false;
+        self.named_saves_error = None;
+        self.named_save_rename = None;
+    }
+
+    pub fn refresh_named_saves(&mut self) -> Result<(), String> {
+        let save_directory = storage::named_saves_dir_path();
+        self.refresh_named_saves_from_dir(&save_directory)
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn refresh_named_saves_from_dir(&mut self, save_directory: &Path) -> Result<(), String> {
+        match storage::list_named_saves_in_dir(save_directory) {
+            Ok(named_saves) => {
+                self.named_saves = named_saves;
+                self.named_saves_error = None;
+                Ok(())
+            }
+            Err(error) => {
+                self.named_saves.clear();
+                self.named_saves_error = Some(error.clone());
+                Err(error)
+            }
+        }
+    }
+
+    pub fn request_named_save(&mut self) {
+        let save_directory = storage::named_saves_dir_path();
+        self.request_named_save_in_dir(&save_directory);
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn request_named_save_in_dir(&mut self, save_directory: &Path) {
+        let display_name = match normalized_named_save_input(&self.named_save_name_input) {
+            Some(display_name) => display_name,
+            None => {
+                self.named_save_error = Some("Le nom de la sauvegarde est obligatoire.".to_string());
+                return;
+            }
+        };
+
+        self.named_save_error = None;
+
+        match storage::find_named_save_by_name_in_dir(&display_name, save_directory) {
+            Ok(Some(existing)) => {
+                self.pending_named_save_confirm_action =
+                    Some(NamedSaveConfirmAction::Overwrite {
+                        save_id: existing.meta.save_id,
+                        display_name: existing.meta.display_name,
+                    });
+                self.show_named_save_confirm = true;
+            }
+            Ok(None) => self.save_named_state_to_dir(save_directory, None),
+            Err(error) => {
+                self.named_save_error = Some(error);
+            }
+        }
+    }
+
+    pub fn start_named_save_load(&mut self, save_id: &str) {
+        if let Some(save) = self
+            .named_saves
+            .iter()
+            .find(|save| save.meta.save_id == save_id)
+            .cloned()
+        {
+            self.pending_named_save_confirm_action = Some(NamedSaveConfirmAction::Load {
+                save_id: save.meta.save_id,
+                display_name: save.meta.display_name,
+            });
+            self.show_named_save_confirm = true;
+        }
+    }
+
+    pub fn start_named_save_delete(&mut self, save_id: &str) {
+        if let Some(save) = self
+            .named_saves
+            .iter()
+            .find(|save| save.meta.save_id == save_id)
+            .cloned()
+        {
+            self.pending_named_save_confirm_action = Some(NamedSaveConfirmAction::Delete {
+                save_id: save.meta.save_id,
+                display_name: save.meta.display_name,
+            });
+            self.show_named_save_confirm = true;
+        }
+    }
+
+    pub fn start_named_save_rename(&mut self, save_id: &str) {
+        if let Some(save) = self
+            .named_saves
+            .iter()
+            .find(|save| save.meta.save_id == save_id)
+            .cloned()
+        {
+            self.named_save_rename = Some(NamedSaveRenameState {
+                save_id: save.meta.save_id,
+                value: save.meta.display_name,
+                error: None,
+            });
+        }
+    }
+
+    pub fn cancel_named_save_rename(&mut self) {
+        self.named_save_rename = None;
+    }
+
+    pub fn save_named_save_rename(&mut self) {
+        let save_directory = storage::named_saves_dir_path();
+
+        let Some(rename) = self.named_save_rename.as_ref() else {
+            return;
+        };
+
+        let save_id = rename.save_id.clone();
+        let new_name = rename.value.clone();
+        self.save_named_save_rename_in_dir(&save_directory, &save_id, &new_name);
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn save_named_save_rename_in_dir(
+        &mut self,
+        save_directory: &Path,
+        save_id: &str,
+        new_name: &str,
+    ) {
+        match storage::rename_named_save_in_dir(save_id, new_name, save_directory) {
+            Ok(meta) => {
+                self.named_save_rename = None;
+                let _ = self.refresh_named_saves_from_dir(save_directory);
+                self.set_status(
+                    StatusKind::Success,
+                    format!("Sauvegarde renommee : {}.", meta.display_name),
+                );
+            }
+            Err(error) => {
+                if let Some(rename) = self.named_save_rename.as_mut() {
+                    rename.error = Some(error);
+                }
+            }
+        }
+    }
+
+    pub fn cancel_named_save_confirmation(&mut self) {
+        self.show_named_save_confirm = false;
+        self.pending_named_save_confirm_action = None;
+    }
+
+    pub fn pending_named_save_confirmation(&self) -> Option<(String, String, String)> {
+        match self.pending_named_save_confirm_action.as_ref()? {
+            NamedSaveConfirmAction::Load { display_name, .. } => Some((
+                "Charger une sauvegarde".to_string(),
+                format!(
+                    "Cette action remplace l'etat actuellement affiche par la sauvegarde nommee {}.",
+                    display_name
+                ),
+                "Charger".to_string(),
+            )),
+            NamedSaveConfirmAction::Overwrite { display_name, .. } => Some((
+                "Remplacer une sauvegarde".to_string(),
+                format!(
+                    "Une sauvegarde nommee {} existe deja. Cette action la remplace avec l'etat actuel.",
+                    display_name
+                ),
+                "Remplacer".to_string(),
+            )),
+            NamedSaveConfirmAction::Delete { display_name, .. } => Some((
+                "Supprimer une sauvegarde".to_string(),
+                format!(
+                    "Cette action supprime definitivement la sauvegarde nommee {} et son fichier .bak lorsqu'il existe.",
+                    display_name
+                ),
+                "Supprimer".to_string(),
+            )),
+        }
+    }
+
+    pub fn confirm_pending_named_save_action(&mut self) {
+        self.show_named_save_confirm = false;
+
+        if let Some(action) = self.pending_named_save_confirm_action.take() {
+            let save_directory = storage::named_saves_dir_path();
+
+            match action {
+                NamedSaveConfirmAction::Load { save_id, .. } => {
+                    self.load_named_save_from_dir(&save_directory, &save_id);
+                }
+                NamedSaveConfirmAction::Overwrite { save_id, .. } => {
+                    self.save_named_state_to_dir(&save_directory, Some(&save_id));
+                }
+                NamedSaveConfirmAction::Delete { save_id, .. } => {
+                    self.delete_named_save_in_dir(&save_directory, &save_id);
+                }
+            }
         }
     }
 
@@ -725,6 +995,7 @@ impl MyApp {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     fn reload_local_data_from_path(&mut self, path: &Path) {
         match storage::load_state_from_path(path) {
             Ok(result) => self.apply_reload_state_result(result),
@@ -805,6 +1076,113 @@ impl MyApp {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn save_named_state_to_dir(&mut self, save_directory: &Path, overwrite_save_id: Option<&str>) {
+        let state = self.build_persisted_state();
+        let Some(display_name) = normalized_named_save_input(&self.named_save_name_input) else {
+            self.named_save_error = Some("Le nom de la sauvegarde est obligatoire.".to_string());
+            return;
+        };
+
+        match storage::save_named_state_in_dir(
+            &display_name,
+            &state,
+            overwrite_save_id,
+            save_directory,
+        ) {
+            Ok(result) => {
+                self.named_save_error = None;
+                let _ = self.refresh_named_saves_from_dir(save_directory);
+                self.show_named_save_dialog = false;
+                self.named_save_name_input.clear();
+
+                let mut message = if result.replaced_existing {
+                    format!(
+                        "Sauvegarde nommee remplacee : {}. {} Fichier : {}",
+                        result.meta.display_name,
+                        persisted_state_summary(&state),
+                        result.path.display()
+                    )
+                } else {
+                    format!(
+                        "Sauvegarde nommee creee : {}. {} Fichier : {}",
+                        result.meta.display_name,
+                        persisted_state_summary(&state),
+                        result.path.display()
+                    )
+                };
+
+                if result.backup_path.is_some() {
+                    message.push_str(" Une sauvegarde de secours de la version precedente a ete creee.");
+                }
+
+                self.set_status(StatusKind::Success, message);
+            }
+            Err(error) => {
+                self.named_save_error = Some(error);
+            }
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn load_named_save_from_dir(&mut self, save_directory: &Path, save_id: &str) {
+        match storage::load_named_save_in_dir(save_id, save_directory) {
+            Ok(result) => {
+                let mut status_kind = StatusKind::Success;
+                let mut message = format!(
+                    "Sauvegarde nommee chargee : {}. {} Fichier : {}",
+                    result.meta.display_name,
+                    persisted_state_summary(&result.state),
+                    result.source_path.display()
+                );
+
+                if result.used_backup {
+                    status_kind = StatusKind::Info;
+                    message.push_str(
+                        " Le fichier principal etait indisponible ou invalide ; la sauvegarde de secours .bak a ete utilisee.",
+                    );
+                }
+
+                if result.cleaned_legacy_entries > 0 {
+                    status_kind = StatusKind::Info;
+                    message.push_str(&format!(
+                        " {} entree(s) legacy ont ete ignorees au chargement.",
+                        result.cleaned_legacy_entries
+                    ));
+                }
+
+                self.apply_persisted_state_and_focus(result.state);
+                self.set_status(status_kind, message);
+            }
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible de charger la sauvegarde nommee : {error}"),
+            ),
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn delete_named_save_in_dir(&mut self, save_directory: &Path, save_id: &str) {
+        match storage::delete_named_save_in_dir(save_id, save_directory) {
+            Ok(()) => {
+                if self
+                    .named_save_rename
+                    .as_ref()
+                    .is_some_and(|rename| rename.save_id == save_id)
+                {
+                    self.named_save_rename = None;
+                }
+
+                let _ = self.refresh_named_saves_from_dir(save_directory);
+                self.set_status(StatusKind::Success, "Sauvegarde nommee supprimee.");
+            }
+            Err(error) => self.set_status(
+                StatusKind::Error,
+                format!("Impossible de supprimer la sauvegarde nommee : {error}"),
+            ),
+        }
+    }
+
     pub fn set_status(&mut self, kind: StatusKind, message: impl Into<String>) {
         self.status = Some(StatusBanner {
             kind,
@@ -878,6 +1256,14 @@ impl MyApp {
         self.show_delete_local_save_confirm = false;
         self.show_load_confirm = false;
         self.pending_load_action = None;
+        self.show_named_save_dialog = false;
+        self.show_named_load_dialog = false;
+        self.show_named_save_confirm = false;
+        self.pending_named_save_confirm_action = None;
+        self.named_save_name_input.clear();
+        self.named_save_error = None;
+        self.named_saves_error = None;
+        self.named_save_rename = None;
     }
 }
 
@@ -907,6 +1293,40 @@ fn persisted_state_summary(state: &PersistedState) -> String {
 
     message.push('.');
     message
+}
+
+fn named_save_summary(summary: &storage::NamedSaveSummary) -> String {
+    let has_data = summary.data_summary.zones > 0
+        || summary.data_summary.dungeons > 0
+        || summary.data_summary.duo_trios > 0
+        || summary.data_summary.arenas > 0;
+
+    if !has_data && summary.data_summary.draft_count == 0 {
+        return "La sauvegarde est vide.".to_string();
+    }
+
+    let mut message = format!(
+        "Resume : {} zone(s), {} donjon(s), {} run(s) duo/trio, {} session(s) PL arene",
+        summary.data_summary.zones,
+        summary.data_summary.dungeons,
+        summary.data_summary.duo_trios,
+        summary.data_summary.arenas,
+    );
+
+    if summary.data_summary.draft_count > 0 {
+        message.push_str(&format!(
+            ", {} brouillon(s)",
+            summary.data_summary.draft_count
+        ));
+    }
+
+    message.push('.');
+    message
+}
+
+fn normalized_named_save_input(value: &str) -> Option<String> {
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!normalized.is_empty()).then_some(normalized)
 }
 
 impl eframe::App for MyApp {
@@ -1220,6 +1640,18 @@ mod tests {
         let _ = fs::remove_file(backup_path_for(path));
     }
 
+    fn temp_named_saves_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("evofarm-main-saves-{name}-{unique}"))
+    }
+
+    fn cleanup_temp_dir(path: &Path) {
+        let _ = fs::remove_dir_all(path);
+    }
+
     fn sample_dungeon_draft() -> DungeonForm {
         DungeonForm {
             name: "Draft Blop".to_string(),
@@ -1291,6 +1723,21 @@ mod tests {
         app.show_delete_local_save_confirm = true;
         app.show_load_confirm = true;
         app.pending_load_action = Some(LoadAction::ReloadLocal);
+        app.show_named_save_dialog = true;
+        app.show_named_load_dialog = true;
+        app.show_named_save_confirm = true;
+        app.pending_named_save_confirm_action = Some(NamedSaveConfirmAction::Load {
+            save_id: "save-test".to_string(),
+            display_name: "Save test".to_string(),
+        });
+        app.named_save_name_input = "Save test".to_string();
+        app.named_save_error = Some("save".to_string());
+        app.named_saves_error = Some("list".to_string());
+        app.named_save_rename = Some(NamedSaveRenameState {
+            save_id: "save-test".to_string(),
+            value: "Rename".to_string(),
+            error: Some("rename".to_string()),
+        });
 
         app.apply_persisted_state(PersistedState {
             data: sample_loaded_data(),
@@ -1327,6 +1774,13 @@ mod tests {
         assert!(!app.show_delete_local_save_confirm);
         assert!(!app.show_load_confirm);
         assert!(app.pending_load_action.is_none());
+        assert!(!app.show_named_save_dialog);
+        assert!(!app.show_named_load_dialog);
+        assert!(!app.show_named_save_confirm);
+        assert!(app.pending_named_save_confirm_action.is_none());
+        assert!(app.named_save_error.is_none());
+        assert!(app.named_saves_error.is_none());
+        assert!(app.named_save_rename.is_none());
     }
 
     #[test]
@@ -1397,6 +1851,172 @@ mod tests {
             .contains("1 brouillon(s)"));
 
         cleanup_temp_state(&path);
+    }
+
+    #[test]
+    fn save_named_state_to_dir_saves_data_and_drafts() {
+        let directory = temp_named_saves_dir("save-named");
+        let mut app = MyApp {
+            data: sample_loaded_data(),
+            dungeon_form: sample_dungeon_draft(),
+            show_named_save_dialog: true,
+            named_save_name_input: "  Route   Glours ".to_string(),
+            ..Default::default()
+        };
+
+        app.save_named_state_to_dir(&directory, None);
+
+        let saves = storage::list_named_saves_in_dir(&directory).unwrap();
+        let loaded = storage::load_named_save_in_dir(&saves[0].meta.save_id, &directory).unwrap();
+
+        assert_eq!(saves.len(), 1);
+        assert_eq!(saves[0].meta.display_name, "Route Glours");
+        assert_eq!(loaded.state.data.zones.len(), 1);
+        assert_eq!(
+            loaded.state.drafts.dungeon_form.as_ref().unwrap().name,
+            "Draft Blop"
+        );
+        assert!(!app.show_named_save_dialog);
+        assert!(app.named_save_name_input.is_empty());
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+
+        cleanup_temp_dir(&directory);
+    }
+
+    #[test]
+    fn open_named_dialogs_toggle_visibility() {
+        let mut app = MyApp {
+            show_named_load_dialog: true,
+            named_save_name_input: "Ancien nom".to_string(),
+            ..Default::default()
+        };
+
+        app.open_named_save_dialog();
+        assert!(app.show_named_save_dialog);
+        assert!(!app.show_named_load_dialog);
+        assert!(app.named_save_name_input.is_empty());
+
+        app.close_named_save_dialog();
+        assert!(!app.show_named_save_dialog);
+        assert!(app.named_save_name_input.is_empty());
+    }
+
+    #[test]
+    fn request_named_save_in_dir_with_existing_name_opens_overwrite_confirmation() {
+        let directory = temp_named_saves_dir("save-overwrite-confirm");
+        let saved = storage::save_named_state_in_dir(
+            "Route Glours",
+            &PersistedState::default(),
+            None,
+            &directory,
+        )
+        .unwrap();
+        let mut app = MyApp {
+            show_named_save_dialog: true,
+            named_save_name_input: " route   glours ".to_string(),
+            ..Default::default()
+        };
+
+        app.request_named_save_in_dir(&directory);
+
+        assert!(app.show_named_save_confirm);
+        assert_eq!(
+            app.pending_named_save_confirm_action,
+            Some(NamedSaveConfirmAction::Overwrite {
+                save_id: saved.meta.save_id,
+                display_name: "Route Glours".to_string(),
+            })
+        );
+
+        cleanup_temp_dir(&directory);
+    }
+
+    #[test]
+    fn load_named_save_from_dir_restores_saved_state() {
+        let directory = temp_named_saves_dir("load-named");
+        let state = PersistedState {
+            data: sample_loaded_data(),
+            drafts: DraftState {
+                zone_form: Some(sample_zone_draft()),
+                ..DraftState::default()
+            },
+            ..PersistedState::default()
+        };
+        let saved = storage::save_named_state_in_dir("Route load", &state, None, &directory).unwrap();
+        let mut app = MyApp {
+            current_tab: Tab::Bilans,
+            ..Default::default()
+        };
+
+        app.load_named_save_from_dir(&directory, &saved.meta.save_id);
+
+        assert_eq!(app.current_tab, Tab::Zones);
+        assert_eq!(app.data.zones.len(), 1);
+        assert_eq!(app.zone_form.name, "Brouillon zone");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+
+        cleanup_temp_dir(&directory);
+    }
+
+    #[test]
+    fn save_named_save_rename_in_dir_refreshes_list() {
+        let directory = temp_named_saves_dir("rename-named");
+        let saved = storage::save_named_state_in_dir(
+            "Route rename",
+            &PersistedState::default(),
+            None,
+            &directory,
+        )
+        .unwrap();
+        let mut app = MyApp::default();
+        app.refresh_named_saves_from_dir(&directory).unwrap();
+        app.named_save_rename = Some(NamedSaveRenameState {
+            save_id: saved.meta.save_id.clone(),
+            value: " Route   rename xl ".to_string(),
+            error: None,
+        });
+
+        app.save_named_save_rename_in_dir(&directory, &saved.meta.save_id, " Route   rename xl ");
+
+        assert!(app.named_save_rename.is_none());
+        assert_eq!(app.named_saves.len(), 1);
+        assert_eq!(app.named_saves[0].meta.display_name, "Route rename xl");
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+
+        cleanup_temp_dir(&directory);
+    }
+
+    #[test]
+    fn delete_named_save_in_dir_refreshes_list() {
+        let directory = temp_named_saves_dir("delete-named");
+        let saved = storage::save_named_state_in_dir(
+            "Route delete",
+            &PersistedState::default(),
+            None,
+            &directory,
+        )
+        .unwrap();
+        let mut app = MyApp::default();
+        app.refresh_named_saves_from_dir(&directory).unwrap();
+
+        app.delete_named_save_in_dir(&directory, &saved.meta.save_id);
+
+        assert!(app.named_saves.is_empty());
+        assert!(matches!(
+            app.status.as_ref().map(|status| status.kind),
+            Some(StatusKind::Success)
+        ));
+
+        cleanup_temp_dir(&directory);
     }
 
     #[test]

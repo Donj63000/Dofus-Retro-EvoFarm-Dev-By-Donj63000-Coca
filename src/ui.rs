@@ -13,8 +13,8 @@ use crate::reports::{
     CategorySeries, ReportPeriod, ReportSummary, SessionBarSegment,
 };
 use crate::theme;
-use crate::{MyApp, StatusBanner, StatusKind, APP_NAME};
-use chrono::NaiveDateTime;
+use crate::{named_save_summary, persisted_state_summary, MyApp, StatusBanner, StatusKind, APP_NAME};
+use chrono::{Local, NaiveDateTime};
 use eframe::egui;
 use eframe::egui::TextureHandle;
 use egui_plot::{Bar, BarChart, Line, Plot, PlotPoint, PlotPoints, Points};
@@ -1053,6 +1053,34 @@ impl MyApp {
             }
         }
 
+        if self.show_named_save_dialog {
+            self.render_named_save_dialog(ctx);
+        }
+
+        if self.show_named_load_dialog {
+            self.render_named_load_dialog(ctx);
+        }
+
+        if self.show_named_save_confirm {
+            if let Some((title, body, confirm_label)) = self.pending_named_save_confirmation() {
+                let confirmed = confirm_dialog(
+                    ctx,
+                    &mut self.show_named_save_confirm,
+                    &title,
+                    &body,
+                    &confirm_label,
+                );
+
+                if confirmed {
+                    self.confirm_pending_named_save_action();
+                } else if !self.show_named_save_confirm {
+                    self.cancel_named_save_confirmation();
+                }
+            } else {
+                self.cancel_named_save_confirmation();
+            }
+        }
+
         if confirm_dialog(
             ctx,
             &mut self.show_clear_state_confirm,
@@ -1071,6 +1099,299 @@ impl MyApp {
             "Supprimer la sauvegarde",
         ) {
             self.delete_local_save();
+        }
+    }
+
+    fn render_named_save_dialog(&mut self, ctx: &egui::Context) {
+        let colors = theme::palette();
+        let mut open = self.show_named_save_dialog;
+        let mut submit = false;
+
+        egui::Window::new("Sauvegarder")
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .collapsible(false)
+            .resizable(false)
+            .default_width(520.0)
+            .show(ctx, |ui| {
+                ui.label(
+                    egui::RichText::new(
+                        "Cree une sauvegarde nommee de l'etat actuel. L'autosave locale reste active en arriere-plan.",
+                    )
+                    .size(14.0)
+                    .color(colors.text_secondary),
+                );
+                ui.add_space(12.0);
+
+                ui.label(
+                    egui::RichText::new("Nom de la sauvegarde")
+                        .size(13.0)
+                        .strong()
+                        .color(colors.text_primary),
+                );
+                ui.add_space(4.0);
+                let response = dialog_text_input(
+                    ui,
+                    &mut self.named_save_name_input,
+                    "Ex. Route Glours solo",
+                );
+                let submit_with_enter =
+                    response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
+
+                ui.add_space(12.0);
+                ui.label(
+                    egui::RichText::new("Resume de l'etat actuel")
+                        .size(12.0)
+                        .strong()
+                        .color(colors.text_primary),
+                );
+                ui.label(
+                    egui::RichText::new(persisted_state_summary(&self.build_persisted_state()))
+                        .size(12.0)
+                        .color(colors.text_secondary),
+                );
+
+                if let Some(error) = self.named_save_error.as_ref() {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(error)
+                            .size(12.0)
+                            .color(colors.danger),
+                    );
+                }
+
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
+                    if secondary_button(ui, "Annuler").clicked() {
+                        open = false;
+                    }
+
+                    if primary_button(ui, "Enregistrer").clicked() || submit_with_enter {
+                        submit = true;
+                    }
+                });
+            });
+
+        if submit {
+            self.request_named_save();
+        }
+
+        if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+            open = false;
+        }
+
+        if !open {
+            self.close_named_save_dialog();
+        }
+    }
+
+    fn render_named_load_dialog(&mut self, ctx: &egui::Context) {
+        let colors = theme::palette();
+        let mut open = self.show_named_load_dialog;
+        let named_saves = self.named_saves.clone();
+        let mut load_action: Option<String> = None;
+        let mut rename_action: Option<String> = None;
+        let mut save_rename = false;
+        let mut cancel_rename = false;
+        let mut delete_action: Option<String> = None;
+        let mut refresh_requested = false;
+
+        egui::Window::new("Charger")
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .collapsible(false)
+            .resizable(true)
+            .default_width(760.0)
+            .default_height(560.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(
+                            "Sauvegardes nommees triees de la plus recente a la plus ancienne.",
+                        )
+                        .size(14.0)
+                        .color(colors.text_secondary),
+                    );
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if secondary_button(ui, "Actualiser").clicked() {
+                            refresh_requested = true;
+                        }
+                    });
+                });
+
+                if let Some(error) = self.named_saves_error.as_ref() {
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new(error)
+                            .size(12.0)
+                            .color(colors.danger),
+                    );
+                }
+
+                ui.add_space(12.0);
+
+                if named_saves.is_empty() {
+                    ui.label(
+                        egui::RichText::new("Aucune sauvegarde nommee disponible pour le moment.")
+                            .size(13.0)
+                            .color(colors.text_secondary),
+                    );
+                } else {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([true, false])
+                        .show(ui, |ui| {
+                            for save in named_saves {
+                                let rename_open = self
+                                    .named_save_rename
+                                    .as_ref()
+                                    .is_some_and(|rename| rename.save_id == save.meta.save_id);
+
+                                egui::Frame::none()
+                                    .fill(colors.surface_alt)
+                                    .stroke(egui::Stroke::new(1.0, colors.border))
+                                    .rounding(12.0)
+                                    .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+                                    .show(ui, |ui| {
+                                        ui.horizontal_top(|ui| {
+                                            ui.vertical(|ui| {
+                                                ui.label(
+                                                    egui::RichText::new(&save.meta.display_name)
+                                                        .size(16.0)
+                                                        .strong()
+                                                        .color(colors.text_primary),
+                                                );
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "Mis a jour le {}",
+                                                        format_named_save_updated_at(
+                                                            save.meta.updated_at
+                                                        )
+                                                    ))
+                                                    .size(11.0)
+                                                    .color(colors.text_secondary),
+                                                );
+                                                ui.add_space(4.0);
+                                                ui.label(
+                                                    egui::RichText::new(named_save_summary(&save))
+                                                        .size(12.0)
+                                                        .color(colors.text_secondary),
+                                                );
+
+                                                if save.used_backup {
+                                                    ui.add_space(4.0);
+                                                    ui.label(
+                                                        egui::RichText::new(
+                                                            "Chargement de secours disponible via le .bak.",
+                                                        )
+                                                        .size(11.0)
+                                                        .color(colors.accent),
+                                                    );
+                                                }
+                                            });
+
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Min),
+                                                |ui| {
+                                                    if danger_button(ui, "Supprimer").clicked() {
+                                                        delete_action =
+                                                            Some(save.meta.save_id.clone());
+                                                    }
+
+                                                    if rename_open {
+                                                        if secondary_button(ui, "Annuler").clicked()
+                                                        {
+                                                            cancel_rename = true;
+                                                        }
+
+                                                        if primary_button(ui, "Enregistrer")
+                                                            .clicked()
+                                                        {
+                                                            save_rename = true;
+                                                        }
+                                                    } else if secondary_button(ui, "Renommer")
+                                                        .clicked()
+                                                    {
+                                                        rename_action =
+                                                            Some(save.meta.save_id.clone());
+                                                    }
+
+                                                    if primary_button(ui, "Charger").clicked() {
+                                                        load_action =
+                                                            Some(save.meta.save_id.clone());
+                                                    }
+                                                },
+                                            );
+                                        });
+
+                                        if rename_open {
+                                            ui.add_space(10.0);
+
+                                            if let Some(rename) = self.named_save_rename.as_mut() {
+                                                let response = dialog_text_input(
+                                                    ui,
+                                                    &mut rename.value,
+                                                    "Nouveau nom",
+                                                );
+                                                if response.lost_focus()
+                                                    && ui.input(|input| {
+                                                        input.key_pressed(egui::Key::Enter)
+                                                    })
+                                                {
+                                                    save_rename = true;
+                                                }
+
+                                                if let Some(error) = rename.error.as_ref() {
+                                                    ui.add_space(6.0);
+                                                    ui.label(
+                                                        egui::RichText::new(error)
+                                                            .size(11.0)
+                                                            .color(colors.danger),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    });
+
+                                ui.add_space(8.0);
+                            }
+                        });
+                }
+
+                ui.add_space(8.0);
+                if secondary_button(ui, "Fermer").clicked() {
+                    open = false;
+                }
+            });
+
+        if refresh_requested {
+            let _ = self.refresh_named_saves();
+        }
+
+        if let Some(save_id) = rename_action {
+            self.start_named_save_rename(&save_id);
+        }
+
+        if save_rename {
+            self.save_named_save_rename();
+        }
+
+        if cancel_rename {
+            self.cancel_named_save_rename();
+        }
+
+        if let Some(save_id) = delete_action {
+            self.start_named_save_delete(&save_id);
+        }
+
+        if let Some(save_id) = load_action {
+            self.start_named_save_load(&save_id);
+        }
+
+        if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+            open = false;
+        }
+
+        if !open {
+            self.close_named_load_dialog();
         }
     }
 
@@ -1111,6 +1432,14 @@ impl MyApp {
                             });
 
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if secondary_button(ui, "Charger").clicked() {
+                                    self.open_named_load_dialog();
+                                }
+
+                                if primary_button(ui, "Sauvegarder").clicked() {
+                                    self.open_named_save_dialog();
+                                }
+
                                 let options_menu = ui.menu_button(
                                     egui::RichText::new("⚙")
                                         .size(20.0)
@@ -1119,18 +1448,8 @@ impl MyApp {
                                     |ui| {
                                         ui.set_min_width(240.0);
 
-                                        let save_response = primary_button(ui, "Sauvegarder l'etat");
-                                        let save_clicked = save_response.clicked();
-                                        save_response.on_hover_text(
-                                            "Sauvegarde les donnees validees et les brouillons en cours.",
-                                        );
-                                        if save_clicked {
-                                            self.save();
-                                            ui.close_menu();
-                                        }
-
                                         let reload_response =
-                                            secondary_button(ui, "Recharger la sauvegarde locale");
+                                            secondary_button(ui, "Recharger l'autosave");
                                         let reload_clicked = reload_response.clicked();
                                         reload_response.on_hover_text(
                                             "Recharge la derniere sauvegarde locale disponible.",
@@ -1169,7 +1488,7 @@ impl MyApp {
                                         }
 
                                         let delete_response =
-                                            danger_button(ui, "Supprimer la sauvegarde locale");
+                                            danger_button(ui, "Supprimer l'autosave");
                                         let delete_clicked = delete_response.clicked();
                                         delete_response.on_hover_text(
                                             "Supprime definitivement data.json et son fichier .bak.",
@@ -4106,7 +4425,9 @@ fn render_brand_title(ui: &mut egui::Ui, title: &str) {
         .rounding(16.0)
         .inner_margin(egui::Margin::symmetric(16.0, 10.0))
         .show(ui, |ui| {
-            let galley = ui.painter().layout_job(build_brand_title_job(ui, title, time));
+            let galley = ui
+                .painter()
+                .layout_job(build_brand_title_job(ui, title, time));
             let desired_size = galley.size() + egui::vec2(0.0, 8.0);
             let (rect, _) = ui.allocate_exact_size(desired_size, egui::Sense::hover());
             let text_pos = rect.left_top();
@@ -4242,6 +4563,22 @@ fn wide_primary_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         [ui.available_width(), 34.0],
         themed_button_widget(label, colors.accent_soft, colors.accent, colors.accent),
     )
+}
+
+fn dialog_text_input(ui: &mut egui::Ui, value: &mut String, hint: &str) -> egui::Response {
+    ui.add_sized(
+        [ui.available_width(), 32.0],
+        egui::TextEdit::singleline(value)
+            .hint_text(hint)
+            .margin(egui::vec2(10.0, 7.0)),
+    )
+}
+
+fn format_named_save_updated_at(updated_at: chrono::DateTime<chrono::Utc>) -> String {
+    updated_at
+        .with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 fn status_banner(ui: &mut egui::Ui, status: &StatusBanner) -> bool {

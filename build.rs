@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[cfg(windows)]
 use std::env;
 #[cfg(windows)]
