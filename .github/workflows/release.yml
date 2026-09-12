@@ -1,0 +1,85 @@
+name: Windows Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: validate
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: EvoFarm-Windows-x64
+          path: distribution
+      - name: Verifier la version et les empreintes
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $manifest = Get-Content Cargo.toml -Raw
+          $version = [regex]::Match($manifest, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
+          if (-not $version -or $env:RELEASE_TAG -cne "v$version") {
+            throw "Le tag ne correspond pas a la version du manifeste."
+          }
+          $expectedFiles = @("EvoFarm.exe", "EvoFarm-Windows-x64.zip")
+          $lines = @(Get-Content distribution/SHA256SUMS)
+          if ($lines.Count -ne $expectedFiles.Count) { throw "Manifeste SHA-256 invalide." }
+          foreach ($file in $expectedFiles) {
+            $hash = (Get-FileHash -LiteralPath "distribution/$file" -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($lines -cnotcontains "$hash  $file") { throw "Empreinte incorrecte : $file" }
+          }
+      - name: Publier les telechargements Windows
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $notes = @'
+          ## Telechargement Windows x64
+
+          - **EvoFarm.exe** : executable portable, pret a lancer.
+          - **EvoFarm-Windows-x64.zip** : executable et mode d'emploi.
+          - **SHA256SUMS** : empreintes des deux telechargements.
+
+          Aucun compte ni installateur n'est requis. Les images sont integrees et les donnees restent sur votre ordinateur.
+          Cette distribution n'est pas signee avec un certificat Authenticode.
+
+          Dofus Retro EvoFarm [Dev By Donj63000(Coca)]
+          Remerciements speciaux a Clody pour sa contribution au logiciel et a sa conception.
+          '@
+          $versionNotes = Join-Path "docs/releases" "$env:RELEASE_TAG.md"
+          if (Test-Path -LiteralPath $versionNotes -PathType Leaf) {
+            $notes = [System.IO.File]::ReadAllText($versionNotes)
+          }
+          [System.IO.File]::WriteAllText("release-notes.md", $notes, [System.Text.UTF8Encoding]::new($false))
+          $existingRelease = gh release view $env:RELEASE_TAG --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if (-not ($existingRelease | ConvertFrom-Json).isDraft) {
+              throw "Cette version est deja publique : ses fichiers ne seront pas remplaces."
+            }
+          }
+          else {
+            gh release create $env:RELEASE_TAG --verify-tag --draft --title "EvoFarm $env:RELEASE_TAG - Windows x64" --notes-file release-notes.md
+            if ($LASTEXITCODE -ne 0) { throw "La creation du brouillon a echoue." }
+          }
+          gh release upload $env:RELEASE_TAG distribution/EvoFarm.exe distribution/EvoFarm-Windows-x64.zip distribution/SHA256SUMS --clobber
+          if ($LASTEXITCODE -ne 0) { throw "Le televersement a echoue ; le brouillon peut etre repris." }
+          gh release edit $env:RELEASE_TAG --notes-file release-notes.md --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw "La publication de la release a echoue ; le brouillon est conserve." }

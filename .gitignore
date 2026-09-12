@@ -19,7 +19,6 @@ Desktop.ini
 *.log
 *.tmp
 *.temp
-/clody.zip
 
 # Local instructions and planning files
 AGENTS.md
@@ -29,7 +28,13 @@ Plan.md
 plan.md
 memory.md
 
-# Local packaged artifacts
-/ClodyFarmPro.exe
-/EvoFarm.zip
-/EvoFarm.exe.sha256
+# Je garde les binaires, archives et captures de contrôle hors des sources.
+/*.exe
+/*.zip
+/qa/
+/.qa/
+
+# Je garde les distributions et leurs empreintes dans les releases.
+/SHA256SUMS
+/dist/
+*.exe.sha256

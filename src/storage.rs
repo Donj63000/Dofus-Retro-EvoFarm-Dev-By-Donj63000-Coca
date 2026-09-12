@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_STATE_FILE_BYTES: u64 = 8 * 1024 * 1024;
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub struct LoadDataResult {
     pub data: AppData,
     pub cleaned_legacy_entries: usize,
@@ -87,11 +87,7 @@ struct LoadNamedSaveEnvelopeResult {
 }
 
 pub fn data_file_path() -> PathBuf {
-    preferred_data_file_path()
-}
-
-pub fn data_backup_path() -> PathBuf {
-    backup_path_for(&data_file_path())
+    local_data_paths()[0].clone()
 }
 
 #[allow(dead_code)]
@@ -100,25 +96,10 @@ pub fn named_saves_dir_path() -> PathBuf {
 }
 
 pub fn has_local_state() -> bool {
-    let preferred_path = preferred_data_file_path();
-
-    preferred_path.exists()
-        || data_backup_path().exists()
-        || legacy_data_file_paths()
-            .into_iter()
-            .any(|legacy_path| legacy_path.exists() || backup_path_for(&legacy_path).exists())
+    has_state_at_paths(&local_data_paths())
 }
 
-#[allow(dead_code)]
-pub fn load_data() -> Result<LoadDataResult, String> {
-    let result = load_state()?;
-    Ok(LoadDataResult {
-        data: result.state.data,
-        cleaned_legacy_entries: result.cleaned_legacy_entries,
-    })
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub fn load_data_from_path(path: &Path) -> Result<LoadDataResult, String> {
     let result = load_state_from_path(path)?;
     Ok(LoadDataResult {
@@ -127,16 +108,7 @@ pub fn load_data_from_path(path: &Path) -> Result<LoadDataResult, String> {
     })
 }
 
-#[allow(dead_code)]
-pub fn save_data(data: &AppData) -> Result<PathBuf, String> {
-    let result = save_state(&PersistedState {
-        data: data.clone(),
-        ..PersistedState::default()
-    })?;
-    Ok(result.path)
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub fn save_data_to_path(data: &AppData, path: &Path) -> Result<PathBuf, String> {
     let result = save_state_to_path(
         &PersistedState {
@@ -149,22 +121,7 @@ pub fn save_data_to_path(data: &AppData, path: &Path) -> Result<PathBuf, String>
 }
 
 pub fn load_state() -> Result<LoadStateResult, String> {
-    let preferred_path = preferred_data_file_path();
-    let preferred_backup = backup_path_for(&preferred_path);
-
-    if preferred_path.exists() || preferred_backup.exists() {
-        return load_state_from_path(&preferred_path);
-    }
-
-    for legacy_path in legacy_data_file_paths() {
-        let legacy_backup = backup_path_for(&legacy_path);
-
-        if legacy_path.exists() || legacy_backup.exists() {
-            return load_state_from_path(&legacy_path);
-        }
-    }
-
-    load_state_from_path(&preferred_path)
+    load_state_from_paths(&local_data_paths())
 }
 
 pub fn load_state_from_path(path: &Path) -> Result<LoadStateResult, String> {
@@ -197,11 +154,6 @@ pub fn load_state_from_path(path: &Path) -> Result<LoadStateResult, String> {
     }
 }
 
-pub fn save_state(state: &PersistedState) -> Result<SaveStateResult, String> {
-    let path = data_file_path();
-    save_state_to_path(state, &path)
-}
-
 #[allow(dead_code)]
 pub fn list_named_saves() -> Result<Vec<NamedSaveSummary>, String> {
     list_named_saves_in_dir(&named_saves_dir_path())
@@ -223,7 +175,12 @@ pub fn save_named_state(
     state: &PersistedState,
     overwrite_save_id: Option<&str>,
 ) -> Result<SaveNamedSaveResult, String> {
-    save_named_state_in_dir(display_name, state, overwrite_save_id, &named_saves_dir_path())
+    save_named_state_in_dir(
+        display_name,
+        state,
+        overwrite_save_id,
+        &named_saves_dir_path(),
+    )
 }
 
 #[allow(dead_code)]
@@ -237,8 +194,7 @@ pub fn delete_named_save(save_id: &str) -> Result<(), String> {
 }
 
 pub fn delete_state() -> Result<(), String> {
-    let preferred_path = preferred_data_file_path();
-    delete_state_at_path(&preferred_path)
+    delete_state_at_paths(&local_data_paths())
 }
 
 pub fn delete_state_at_path(path: &Path) -> Result<(), String> {
@@ -433,7 +389,7 @@ pub(crate) fn delete_named_save_in_dir(save_id: &str, directory: &Path) -> Resul
     delete_state_at_path(&named_save_path_for_dir(directory, save_id))
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 fn parse_data(content: &str) -> Result<LoadDataResult, String> {
     let (state, cleaned_legacy_entries) = parse_state(content)?;
     Ok(LoadDataResult {
@@ -442,28 +398,45 @@ fn parse_data(content: &str) -> Result<LoadDataResult, String> {
     })
 }
 
-fn preferred_data_file_path() -> PathBuf {
-    app_data_file_path("EvoFarm")
+fn local_data_paths() -> [PathBuf; 3] {
+    let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
+    data_paths_in(&base)
+}
+
+fn data_paths_in(base: &Path) -> [PathBuf; 3] {
+    // Je garde les anciens dossiers uniquement pour retrouver les sauvegardes existantes.
+    ["EvoFarm", "MarkarthFarm", "dofus_rentabilite"]
+        .map(|directory| base.join(directory).join("data.json"))
+}
+
+fn has_state_at_path(path: &Path) -> bool {
+    path.exists() || backup_path_for(path).exists()
+}
+
+fn has_state_at_paths(paths: &[PathBuf; 3]) -> bool {
+    paths.iter().any(|path| has_state_at_path(path))
 }
 
 fn preferred_named_saves_dir_path() -> PathBuf {
-    app_data_dir("EvoFarm").join("saves")
+    data_file_path().with_file_name("saves")
 }
 
-fn legacy_data_file_paths() -> Vec<PathBuf> {
-    vec![app_data_file_path("dofus_rentabilite")]
+fn load_state_from_paths(paths: &[PathBuf; 3]) -> Result<LoadStateResult, String> {
+    // Je respecte la priorité du premier emplacement présent, même si son contenu est invalide.
+    // Je ne migre les données vers EvoFarm qu'à la prochaine sauvegarde.
+    let selected = paths
+        .iter()
+        .find(|path| has_state_at_path(path))
+        .unwrap_or(&paths[0]);
+    load_state_from_path(selected)
 }
 
-fn app_data_file_path(app_directory: &str) -> PathBuf {
-    let mut dir = app_data_dir(app_directory);
-    dir.push("data.json");
-    dir
-}
-
-fn app_data_dir(app_directory: &str) -> PathBuf {
-    let mut dir = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
-    dir.push(app_directory);
-    dir
+fn delete_state_at_paths(paths: &[PathBuf; 3]) -> Result<(), String> {
+    // Je retire aussi les sauvegardes historiques pour éviter leur retour au prochain lancement.
+    for path in paths {
+        delete_state_at_path(path)?;
+    }
+    Ok(())
 }
 
 fn read_state_file_limited(path: &Path) -> Result<String, String> {
@@ -855,7 +828,8 @@ fn canonical_named_save_name(value: &str) -> Result<String, String> {
 }
 
 fn normalized_named_save_name(value: &str) -> String {
-    value.split_whitespace()
+    value
+        .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
@@ -1051,8 +1025,8 @@ fn is_legacy_zone_entry(value: &Map<String, Value>) -> bool {
 mod tests {
     use super::*;
     use crate::models::{
-        DofusClass, DraftState, DurationInput, PartyMode, PersistedInlineEdit, PersistedState,
-        ZoneForm,
+        ArenaForm, DofusClass, DraftState, DungeonForm, DuoTrioForm, DurationInput, PartyMode,
+        PersistedInlineEdit, PersistedState, ZoneForm,
     };
 
     fn temp_file_path(name: &str) -> PathBuf {
@@ -1125,6 +1099,374 @@ mod tests {
             },
             session_total_kamas: "250000".to_string(),
         }
+    }
+
+    struct LocalStateFixture {
+        root: PathBuf,
+        paths: [PathBuf; 3],
+    }
+
+    impl LocalStateFixture {
+        fn new(name: &str) -> Self {
+            let root = temp_file_path(name).with_extension("dir");
+            fs::create_dir(&root).unwrap();
+            let paths = data_paths_in(&root);
+            Self { root, paths }
+        }
+
+        fn write(&self, path: &Path, bytes: &[u8]) {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+    }
+
+    impl Drop for LocalStateFixture {
+        fn drop(&mut self) {
+            // Je nettoie uniquement le dossier temporaire créé par ce test.
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn sample_migration_state() -> PersistedState {
+        let recorded_at = Some(
+            chrono::NaiveDateTime::parse_from_str("2026-03-08 14:45:00", "%Y-%m-%d %H:%M:%S")
+                .unwrap(),
+        );
+        let zone_form = sample_zone_draft();
+        let dungeon_form = DungeonForm {
+            name: "Brouillon donjon".to_string(),
+            ..DungeonForm::default()
+        };
+        let duo_trio_form = DuoTrioForm {
+            name: "Brouillon duo".to_string(),
+            ..DuoTrioForm::default()
+        };
+        let arena_form = ArenaForm {
+            name: "Brouillon arène".to_string(),
+            ..ArenaForm::default()
+        };
+        let state = PersistedState {
+            data: AppData {
+                zones: vec![ZoneEntry {
+                    name: "Plaine".to_string(),
+                    character_class: Some(DofusClass::Cra),
+                    recorded_at,
+                    session_time_seconds: 3_600.0,
+                    session_total_kamas: 100_000.0,
+                    ..ZoneEntry::default()
+                }],
+                dungeons: vec![DungeonEntry {
+                    name: "Donjon".to_string(),
+                    character_class: Some(DofusClass::Enutrof),
+                    recorded_at,
+                    run_time_minutes: 30.0,
+                    gross_kamas_per_run: 80_000.0,
+                    key_price: 1_000.0,
+                    ..DungeonEntry::default()
+                }],
+                duo_trios: vec![DuoTrioEntry {
+                    name: "Capture".to_string(),
+                    character_class: Some(DofusClass::Iop),
+                    recorded_at,
+                    party_mode: PartyMode::Trio,
+                    run_time_seconds: 1_800.0,
+                    loot_kamas_per_run: 40_000.0,
+                    capture_stone_price: 5_000.0,
+                    key_unit_price: 1_000.0,
+                    full_soul_sale_price: 60_000.0,
+                    ..DuoTrioEntry::default()
+                }],
+                arenas: vec![ArenaEntry {
+                    name: "Arène".to_string(),
+                    character_class: Some(DofusClass::Feca),
+                    recorded_at,
+                    round_time_minutes: 10.0,
+                    seat_price: 10_000.0,
+                    seats_sold: 6,
+                    capture_price: 20_000.0,
+                    captures_count: 1,
+                    ..ArenaEntry::default()
+                }],
+            },
+            drafts: DraftState {
+                zone_form: Some(zone_form.clone()),
+                dungeon_form: Some(dungeon_form.clone()),
+                duo_trio_form: Some(duo_trio_form.clone()),
+                arena_form: Some(arena_form.clone()),
+                zone_edit: Some(PersistedInlineEdit {
+                    index: 0,
+                    form: zone_form,
+                }),
+                dungeon_edit: Some(PersistedInlineEdit {
+                    index: 0,
+                    form: dungeon_form,
+                }),
+                duo_trio_edit: Some(PersistedInlineEdit {
+                    index: 0,
+                    form: duo_trio_form,
+                }),
+                arena_edit: Some(PersistedInlineEdit {
+                    index: 0,
+                    form: arena_form,
+                }),
+            },
+            ..PersistedState::default()
+        };
+        sanitize_persisted_state(&state).unwrap()
+    }
+
+    #[test]
+    fn local_state_paths_use_the_new_directory_for_writes() {
+        let fixture = LocalStateFixture::new("local-paths");
+        assert_eq!(fixture.paths[0], fixture.root.join("EvoFarm/data.json"));
+        assert_eq!(
+            fixture.paths[2],
+            fixture.root.join("dofus_rentabilite/data.json")
+        );
+        assert!(fixture
+            .paths
+            .iter()
+            .all(|path| path.starts_with(&fixture.root)));
+        assert_ne!(fixture.paths[0], fixture.paths[1]);
+        assert_ne!(fixture.paths[1], fixture.paths[2]);
+    }
+
+    #[test]
+    fn missing_local_state_does_not_create_files() {
+        let fixture = LocalStateFixture::new("local-missing");
+        assert!(!has_state_at_paths(&fixture.paths));
+        assert!(load_state_from_paths(&fixture.paths).is_err());
+        assert_eq!(fs::read_dir(&fixture.root).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn local_state_selects_the_first_present_primary_even_when_empty() {
+        for first_present in 0..3 {
+            let fixture = LocalStateFixture::new("local-primary-priority");
+            for path in fixture.paths.iter().skip(first_present) {
+                fixture.write(path, b"{}");
+            }
+            assert!(has_state_at_paths(&fixture.paths));
+            let loaded = load_state_from_paths(&fixture.paths).unwrap();
+            assert_eq!(loaded.source_path, fixture.paths[first_present]);
+            assert!(!loaded.used_backup);
+            assert!(loaded.state.data.zones.is_empty());
+        }
+    }
+
+    #[test]
+    fn local_state_recovers_the_selected_backup_before_any_older_primary() {
+        for selected in 0..3 {
+            for invalid_primary in [false, true] {
+                let fixture = LocalStateFixture::new("local-backup-priority");
+                if invalid_primary {
+                    fixture.write(&fixture.paths[selected], b"{ invalid json }");
+                }
+                let backup = backup_path_for(&fixture.paths[selected]);
+                fixture.write(&backup, b"{}");
+                for older_path in fixture.paths.iter().skip(selected + 1) {
+                    fixture.write(older_path, b"{}");
+                }
+                assert!(has_state_at_paths(&fixture.paths));
+                let loaded = load_state_from_paths(&fixture.paths).unwrap();
+                assert_eq!(loaded.source_path, backup);
+                assert!(loaded.used_backup);
+                if !invalid_primary {
+                    assert!(!fixture.paths[selected].exists());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_selected_state_never_falls_back_to_an_older_directory() {
+        for selected in 0..2 {
+            for with_primary in [false, true] {
+                for with_backup in [false, true] {
+                    if !with_primary && !with_backup {
+                        continue;
+                    }
+                    let fixture = LocalStateFixture::new("local-no-silent-rollback");
+                    if with_primary {
+                        fixture.write(&fixture.paths[selected], b"{ invalid json }");
+                    }
+                    if with_backup {
+                        fixture.write(&backup_path_for(&fixture.paths[selected]), b"[]");
+                    }
+                    fixture.write(&fixture.paths[selected + 1], b"{}");
+                    let error = load_state_from_paths(&fixture.paths).err().unwrap();
+                    assert!(error.contains(&fixture.paths[selected].display().to_string()));
+                    assert_eq!(fs::read(&fixture.paths[selected + 1]).unwrap(), b"{}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn migration_waits_for_save_and_preserves_all_data_drafts_and_original_files() {
+        for legacy_index in 1..3 {
+            for use_backup in [false, true] {
+                let fixture = LocalStateFixture::new("local-migration");
+                let expected = sample_migration_state();
+                let json = serde_json::to_vec_pretty(&expected).unwrap();
+                let source = &fixture.paths[legacy_index];
+                let source_backup = backup_path_for(source);
+                let primary_bytes = if use_backup {
+                    b"{ invalid json }"
+                } else {
+                    &json[..]
+                };
+                fixture.write(source, primary_bytes);
+                fixture.write(&source_backup, &json);
+
+                let loaded = load_state_from_paths(&fixture.paths).unwrap();
+                assert_eq!(loaded.used_backup, use_backup);
+                assert_eq!(
+                    serde_json::to_value(&loaded.state).unwrap(),
+                    serde_json::to_value(&expected).unwrap()
+                );
+                assert!(!fixture.paths[0].exists());
+                assert!(!fixture.paths[0].parent().unwrap().exists());
+
+                let saved = save_state_to_path(&loaded.state, &fixture.paths[0]).unwrap();
+                assert_eq!(saved.path, fixture.paths[0]);
+                assert!(saved.backup_path.is_none());
+                let reloaded = load_state_from_paths(&fixture.paths).unwrap();
+                assert_eq!(reloaded.source_path, fixture.paths[0]);
+                assert!(!reloaded.used_backup);
+                assert_eq!(
+                    serde_json::to_value(&reloaded.state).unwrap(),
+                    serde_json::to_value(&expected).unwrap()
+                );
+                assert_eq!(fs::read(source).unwrap(), primary_bytes);
+                assert_eq!(fs::read(&source_backup).unwrap(), json);
+
+                let initial_save_bytes = fs::read(&fixture.paths[0]).unwrap();
+                save_state_to_path(&PersistedState::default(), &fixture.paths[0]).unwrap();
+                assert_eq!(
+                    fs::read(backup_path_for(&fixture.paths[0])).unwrap(),
+                    initial_save_bytes
+                );
+                assert!(load_state_from_paths(&fixture.paths)
+                    .unwrap()
+                    .state
+                    .data
+                    .zones
+                    .is_empty());
+                assert_eq!(fs::read(source).unwrap(), primary_bytes);
+                assert_eq!(fs::read(&source_backup).unwrap(), json);
+            }
+        }
+    }
+
+    #[test]
+    fn failed_migration_write_preserves_legacy_primary_and_backup() {
+        let fixture = LocalStateFixture::new("local-migration-write-error");
+        let json = serde_json::to_vec_pretty(&sample_migration_state()).unwrap();
+        fixture.write(&fixture.paths[1], &json);
+        let backup = backup_path_for(&fixture.paths[1]);
+        fixture.write(&backup, b"{}");
+        let loaded = load_state_from_paths(&fixture.paths).unwrap();
+        // Je bloque la création du nouveau dossier sans dépendre des permissions du système.
+        fs::write(fixture.paths[0].parent().unwrap(), b"obstacle").unwrap();
+
+        assert!(save_state_to_path(&loaded.state, &fixture.paths[0]).is_err());
+        assert_eq!(fs::read(&fixture.paths[1]).unwrap(), json);
+        assert_eq!(fs::read(&backup).unwrap(), b"{}");
+        assert!(!fixture.paths[0].exists());
+    }
+
+    #[test]
+    fn delete_local_state_removes_every_recognized_file_without_resurrection() {
+        let fixture = LocalStateFixture::new("local-delete-all");
+        for path in &fixture.paths {
+            fixture.write(path, b"{}");
+            fixture.write(&backup_path_for(path), b"{}");
+            fixture.write(&path.with_file_name("notes.txt"), b"a conserver");
+        }
+        assert!(has_state_at_paths(&fixture.paths));
+        delete_state_at_paths(&fixture.paths).unwrap();
+        assert!(!has_state_at_paths(&fixture.paths));
+        assert!(load_state_from_paths(&fixture.paths).is_err());
+        for path in &fixture.paths {
+            assert!(!path.exists());
+            assert!(!backup_path_for(path).exists());
+            assert_eq!(
+                fs::read(path.with_file_name("notes.txt")).unwrap(),
+                b"a conserver"
+            );
+        }
+        delete_state_at_paths(&fixture.paths).unwrap();
+    }
+
+    #[test]
+    fn old_json_without_envelope_migrates_to_the_current_directory() {
+        let fixture = LocalStateFixture::new("local-migration-legacy-json");
+        let expected = sample_migration_state();
+        let json = serde_json::to_vec_pretty(&expected.data).unwrap();
+        fixture.write(&fixture.paths[2], &json);
+        let loaded = load_state_from_paths(&fixture.paths).unwrap();
+        assert_eq!(loaded.state.schema_version, PERSISTED_STATE_VERSION);
+        assert!(!loaded.state.drafts.has_any_draft());
+        save_state_to_path(&loaded.state, &fixture.paths[0]).unwrap();
+        let reloaded = load_state_from_paths(&fixture.paths).unwrap();
+        assert_eq!(
+            serde_json::to_value(&reloaded.state.data).unwrap(),
+            serde_json::to_value(&expected.data).unwrap()
+        );
+        assert_eq!(fs::read(&fixture.paths[2]).unwrap(), json);
+    }
+
+    #[test]
+    fn migrated_state_can_be_preserved_as_a_named_save() {
+        let fixture = LocalStateFixture::new("migration-named-save");
+        let expected = sample_migration_state();
+        let original = serde_json::to_vec_pretty(&expected).unwrap();
+        fixture.write(&fixture.paths[1], &original);
+        let loaded = load_state_from_paths(&fixture.paths).unwrap();
+        let directory = fixture.paths[0].with_file_name("saves");
+
+        // Je vérifie que la reprise historique conserve aussi les brouillons dans une sauvegarde nommée.
+        let saved =
+            save_named_state_in_dir("Mon parcours", &loaded.state, None, &directory).unwrap();
+        let reloaded = load_named_save_in_dir(&saved.meta.save_id, &directory).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(&reloaded.state).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert_eq!(fs::read(&fixture.paths[1]).unwrap(), original);
+        assert!(!fixture.paths[0].exists());
+        assert_eq!(list_named_saves_in_dir(&directory).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn deleting_current_and_historical_state_preserves_named_saves_and_their_backups() {
+        let fixture = LocalStateFixture::new("delete-state-keep-named-saves");
+        for path in &fixture.paths {
+            fixture.write(path, b"{}");
+            fixture.write(&backup_path_for(path), b"{}");
+        }
+        let directory = fixture.paths[0].with_file_name("saves");
+        let saved = save_named_state_in_dir(
+            "Parcours conservé",
+            &sample_migration_state(),
+            None,
+            &directory,
+        )
+        .unwrap();
+        let primary = fs::read(&saved.path).unwrap();
+        let backup = backup_path_for(&saved.path);
+        fs::write(&backup, &primary).unwrap();
+
+        // Je limite la suppression de l'état local aux fichiers reconnus, sans toucher à la bibliothèque.
+        delete_state_at_paths(&fixture.paths).unwrap();
+
+        assert!(!has_state_at_paths(&fixture.paths));
+        assert_eq!(fs::read(&saved.path).unwrap(), primary);
+        assert_eq!(fs::read(&backup).unwrap(), primary);
+        assert_eq!(list_named_saves_in_dir(&directory).unwrap().len(), 1);
+        assert!(load_named_save_in_dir(&saved.meta.save_id, &directory).is_ok());
     }
 
     #[test]
@@ -1580,7 +1922,9 @@ mod tests {
 
         let error = save_data_to_path(&data, &path).unwrap_err();
 
-        assert!(error.contains("La duree de session doit etre superieur a 0."));
+        assert!(
+            error.contains("La durée de session : une valeur strictement positive est requise.")
+        );
         assert!(!path.exists());
     }
 
@@ -1898,8 +2242,8 @@ mod tests {
         )
         .unwrap();
 
-        let renamed = rename_named_save_in_dir(&saved.meta.save_id, "  Route   Ben XL ", &directory)
-            .unwrap();
+        let renamed =
+            rename_named_save_in_dir(&saved.meta.save_id, "  Route   Ben XL ", &directory).unwrap();
         let saves = list_named_saves_in_dir(&directory).unwrap();
 
         assert_eq!(renamed.display_name, "Route Ben XL");

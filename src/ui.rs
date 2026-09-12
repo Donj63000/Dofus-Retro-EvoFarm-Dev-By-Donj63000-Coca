@@ -13,7 +13,9 @@ use crate::reports::{
     CategorySeries, ReportPeriod, ReportSummary, SessionBarSegment,
 };
 use crate::theme;
-use crate::{named_save_summary, persisted_state_summary, MyApp, StatusBanner, StatusKind, APP_NAME};
+use crate::{
+    named_save_summary, persisted_state_summary, MyApp, StatusBanner, StatusKind, APP_NAME,
+};
 use chrono::{Local, NaiveDateTime};
 use eframe::egui;
 use eframe::egui::TextureHandle;
@@ -25,9 +27,10 @@ const REPORT_TABLE_LIMIT: usize = 10;
 const DURATION_COMBO_WIDTH: f32 = 78.0;
 const DURATION_HOURS_MAX: u32 = 24;
 const DURATION_SEGMENT_MAX: u32 = 59;
-const SECTION_GAP: f32 = 14.0;
-const FORM_PANEL_MIN_WIDTH: f32 = 420.0;
-const LIST_PANEL_MIN_WIDTH: f32 = 920.0;
+const SECTION_GAP: f32 = 18.0;
+const FORM_PANEL_MIN_WIDTH: f32 = 400.0;
+const FORM_PANEL_MAX_WIDTH: f32 = 460.0;
+const LIST_PANEL_MIN_WIDTH: f32 = 620.0;
 const REPORT_PANEL_MIN_WIDTH: f32 = 580.0;
 const ACTIVITY_FILTER_PANEL_MIN_WIDTH: f32 = 360.0;
 const ACTIVITY_RESULTS_PANEL_MIN_WIDTH: f32 = 640.0;
@@ -39,7 +42,7 @@ const REPORT_KPI_MAX_COLUMNS: usize = 3;
 const CARD_HEADER_STACK_BREAKPOINT: f32 = 720.0;
 const CARD_COMPACT_METRICS_BREAKPOINT: f32 = 980.0;
 const ACTIVITY_CARD_COMPACT_BREAKPOINT: f32 = 1_120.0;
-const HEADER_LOGO_SIZE: f32 = 52.0;
+const HEADER_LOGO_SIZE: f32 = 70.0;
 const HEADER_BRAND_TITLE_SIZE: f32 = 30.0;
 const HEADER_BRAND_ANIMATION_SPEED: f32 = 0.42;
 const HEADER_BRAND_CHARACTER_OFFSET: f32 = 0.14;
@@ -136,13 +139,18 @@ pub fn matches_search(name: &str, query: &str) -> bool {
     normalized_query.is_empty() || normalize_text_for_matching(name).contains(&normalized_query)
 }
 
-fn styled_tab_button(ui: &mut egui::Ui, current: &mut Tab, tab: Tab, label: &str) {
+fn styled_tab_button(
+    ui: &mut egui::Ui,
+    current: &mut Tab,
+    tab: Tab,
+    label: &str,
+) -> egui::Response {
     let colors = theme::palette();
     let selected = *current == tab;
     let fill = if selected {
-        colors.surface_alt
+        colors.accent_soft
     } else {
-        colors.surface
+        egui::Color32::TRANSPARENT
     };
     let stroke = if selected {
         colors.accent
@@ -163,11 +171,24 @@ fn styled_tab_button(ui: &mut egui::Ui, current: &mut Tab, tab: Tab, label: &str
     )
     .fill(fill)
     .stroke(egui::Stroke::new(1.0, stroke))
-    .rounding(10.0);
+    .rounding(7.0)
+    .min_size(egui::vec2(84.0, 38.0));
 
-    if ui.add(button).clicked() {
+    let response = ui.add(button);
+    if selected {
+        let rect = response.rect;
+        ui.painter().line_segment(
+            [
+                egui::pos2(rect.left() + 13.0, rect.bottom() - 3.0),
+                egui::pos2(rect.right() - 13.0, rect.bottom() - 3.0),
+            ],
+            egui::Stroke::new(2.0, colors.accent),
+        );
+    }
+    if response.clicked() {
         *current = tab;
     }
+    response
 }
 
 fn toggle_chip_button<T: Copy + PartialEq>(
@@ -275,6 +296,13 @@ fn split_two_column_widths(
     (left_width, right_width)
 }
 
+fn split_form_list_widths(total_width: f32) -> (f32, f32) {
+    // Je borne le formulaire pour laisser la place aux résultats sur les grands écrans.
+    let available = total_width - SECTION_GAP;
+    let left = (available * 0.37).clamp(FORM_PANEL_MIN_WIDTH, FORM_PANEL_MAX_WIDTH);
+    (left, available - left)
+}
+
 fn responsive_columns(
     total_width: f32,
     min_item_width: f32,
@@ -310,75 +338,92 @@ fn kpi_card(ui: &mut egui::Ui, label: &str, value: &str, tone: PreviewTone) {
     egui::Frame::none()
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, stroke))
-        .rounding(12.0)
-        .inner_margin(egui::Margin::symmetric(12.0, 9.0))
+        .rounding(8.0)
+        .inner_margin(egui::Margin::symmetric(16.0, 13.0))
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(label)
-                        .size(11.0)
-                        .color(colors.text_secondary),
-                );
-                ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new(value)
-                        .monospace()
-                        .size(16.0)
-                        .strong()
-                        .color(text),
-                );
-            });
+            ui.set_min_width(ui.available_width());
+            ui.label(
+                egui::RichText::new(label)
+                    .size(12.0)
+                    .color(colors.text_secondary),
+            );
+            ui.add_space(3.0);
+            ui.add(
+                egui::Label::new(egui::RichText::new(value).size(21.0).strong().color(text)).wrap(),
+            );
         });
 }
 
 fn metric_badge(ui: &mut egui::Ui, label: &str, value: String) {
-    let colors = theme::palette();
-
-    egui::Frame::none()
-        .fill(colors.surface)
-        .stroke(egui::Stroke::new(1.0, colors.border))
-        .rounding(999.0)
-        .inner_margin(egui::Margin::symmetric(10.0, 5.0))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(label)
-                        .size(11.0)
-                        .color(colors.text_secondary),
-                );
-                ui.label(
-                    egui::RichText::new(value)
-                        .monospace()
-                        .size(12.0)
-                        .color(colors.text_primary),
-                );
-            });
-        });
+    measured_metric_badge(ui, label, value, false);
 }
 
 fn compact_metric_badge(ui: &mut egui::Ui, label: &str, value: String) {
-    let colors = theme::palette();
+    measured_metric_badge(ui, label, value, true);
+}
 
-    egui::Frame::none()
-        .fill(colors.surface)
-        .stroke(egui::Stroke::new(1.0, colors.border))
-        .rounding(999.0)
-        .inner_margin(egui::Margin::symmetric(8.0, 4.0))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(label)
-                        .size(10.0)
-                        .color(colors.text_secondary),
-                );
-                ui.label(
-                    egui::RichText::new(value)
-                        .monospace()
-                        .size(11.0)
-                        .color(colors.text_primary),
-                );
-            });
-        });
+fn measured_metric_badge(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: String,
+    compact: bool,
+) -> egui::Response {
+    let colors = theme::palette();
+    let label_size = if compact { 10.0 } else { 11.0 };
+    let value_size = if compact { 11.0 } else { 12.0 };
+    let margin = if compact { 8.0 } else { 10.0 };
+    let label_width = ui
+        .painter()
+        .layout_no_wrap(
+            label.to_owned(),
+            egui::FontId::proportional(label_size),
+            colors.text_secondary,
+        )
+        .size()
+        .x;
+    let value_width = ui
+        .painter()
+        .layout_no_wrap(
+            value.clone(),
+            egui::FontId::monospace(value_size),
+            colors.text_primary,
+        )
+        .size()
+        .x;
+    let width = (label_width + value_width + ui.spacing().item_spacing.x + margin * 2.0 + 2.0)
+        .min(ui.max_rect().width());
+    // Je réserve aussi la hauteur pour aligner les badges avant leur placement dans la ligne.
+    let height = ui.spacing().interact_size.y + 10.0;
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            egui::Frame::none()
+                .fill(colors.surface)
+                .stroke(egui::Stroke::new(1.0, colors.border))
+                .rounding(8.0)
+                .inner_margin(egui::Margin::symmetric(margin, 5.0))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(label)
+                                .size(label_size)
+                                .color(colors.text_secondary),
+                        );
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(value)
+                                    .monospace()
+                                    .size(value_size)
+                                    .color(colors.text_primary),
+                            )
+                            .wrap(),
+                        );
+                    });
+                });
+        },
+    )
+    .response
 }
 
 fn render_metric_row(ui: &mut egui::Ui, compact: bool, metrics: Vec<(&str, String)>) {
@@ -411,8 +456,9 @@ fn render_chart_series_footer(ui: &mut egui::Ui, chart_series: &[CategorySeries]
 
     for (row_index, row) in chart_series.chunks(columns).enumerate() {
         clamped_content(ui, |ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                for (index, series) in row.iter().rev().enumerate() {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                for (index, series) in row.iter().enumerate() {
                     render_chart_series_chip(ui, chip_width, series, compact);
                     if index + 1 < row.len() {
                         ui.add_space(SECTION_GAP);
@@ -452,6 +498,7 @@ fn render_chart_series_chip(
         egui::vec2(chip_width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
             ui.set_width(chip_width);
             ui.set_max_width(chip_width);
 
@@ -483,7 +530,7 @@ fn render_chart_series_chip(
                                 theme::palette().danger
                             },
                         ))
-                        .wrap(true),
+                        .wrap(),
                     );
                 });
         },
@@ -491,27 +538,20 @@ fn render_chart_series_chip(
 }
 
 fn activity_kind_colors(kind: ActivityKind) -> (egui::Color32, egui::Color32, egui::Color32) {
+    let colors = theme::palette();
     match kind {
         ActivityKind::Zone => (
-            egui::Color32::from_rgba_unmultiplied(91, 62, 27, 214),
-            egui::Color32::from_rgb(231, 173, 86),
-            egui::Color32::from_rgb(244, 208, 148),
+            egui::Color32::from_rgb(53, 46, 33),
+            colors.gold,
+            colors.gold,
         ),
-        ActivityKind::Dungeon => (
-            egui::Color32::from_rgba_unmultiplied(33, 63, 42, 214),
-            egui::Color32::from_rgb(118, 191, 132),
-            egui::Color32::from_rgb(184, 228, 192),
-        ),
+        ActivityKind::Dungeon => (colors.accent_soft, colors.accent, colors.accent),
         ActivityKind::DuoTrio => (
-            egui::Color32::from_rgba_unmultiplied(34, 58, 82, 214),
-            egui::Color32::from_rgb(113, 171, 226),
-            egui::Color32::from_rgb(181, 215, 244),
+            egui::Color32::from_rgb(42, 38, 65),
+            egui::Color32::from_rgb(195, 183, 250),
+            egui::Color32::from_rgb(211, 203, 253),
         ),
-        ActivityKind::Arena => (
-            egui::Color32::from_rgba_unmultiplied(77, 39, 36, 214),
-            egui::Color32::from_rgb(215, 108, 98),
-            egui::Color32::from_rgb(235, 176, 169),
-        ),
+        ActivityKind::Arena => (colors.danger_soft, colors.danger, colors.danger),
     }
 }
 
@@ -535,7 +575,7 @@ fn form_field_row(
         egui::Frame::none()
             .fill(colors.card)
             .stroke(egui::Stroke::new(1.0, colors.border))
-            .rounding(12.0)
+            .rounding(8.0)
             .inner_margin(egui::Margin::symmetric(12.0, 7.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -610,7 +650,7 @@ fn duration_input_row(
         egui::Frame::none()
             .fill(colors.card)
             .stroke(egui::Stroke::new(1.0, colors.border))
-            .rounding(12.0)
+            .rounding(8.0)
             .inner_margin(egui::Margin::symmetric(12.0, 8.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -752,7 +792,7 @@ fn party_mode_selector(ui: &mut egui::Ui, label: &str, mode: &mut PartyMode) -> 
         egui::Frame::none()
             .fill(colors.card)
             .stroke(egui::Stroke::new(1.0, colors.border))
-            .rounding(12.0)
+            .rounding(8.0)
             .inner_margin(egui::Margin::symmetric(8.0, 7.0))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -818,7 +858,7 @@ fn class_selector(
         egui::Frame::none()
             .fill(colors.card)
             .stroke(egui::Stroke::new(1.0, colors.border))
-            .rounding(12.0)
+            .rounding(8.0)
             .inner_margin(egui::Margin::symmetric(8.0, 8.0))
             .show(ui, |ui| {
                 clamped_wrapped_row(ui, |ui| {
@@ -1084,9 +1124,9 @@ impl MyApp {
         if confirm_dialog(
             ctx,
             &mut self.show_clear_state_confirm,
-            "Effacer l'etat",
-            "Cette action vide seulement l'etat actuellement affiche. La sauvegarde locale n'est pas modifiee et pourra etre restauree avec l'option de rechargement.",
-            "Effacer l'etat",
+            "Effacer l'état",
+            "Cette action vide seulement l'état actuellement affiché. La sauvegarde locale n'est pas modifiée et pourra être restaurée avec l'option de rechargement.",
+            "Effacer l'état",
         ) {
             self.clear_current_state();
         }
@@ -1095,7 +1135,7 @@ impl MyApp {
             ctx,
             &mut self.show_delete_local_save_confirm,
             "Supprimer la sauvegarde locale",
-            "Cette action supprime definitivement le fichier local et son fichier .bak lorsqu'ils existent. L'etat actuellement affiche n'est pas efface automatiquement.",
+            "Cette action supprime définitivement la sauvegarde automatique et ses fichiers de secours, y compris ceux des anciennes versions reconnues. Les sauvegardes nommées et l'état actuellement affiché sont conservés.",
             "Supprimer la sauvegarde",
         ) {
             self.delete_local_save();
@@ -1112,10 +1152,11 @@ impl MyApp {
             .collapsible(false)
             .resizable(false)
             .default_width(520.0)
+            .max_width((ctx.screen_rect().width() - 48.0).max(300.0))
             .show(ctx, |ui| {
                 ui.label(
                     egui::RichText::new(
-                        "Cree une sauvegarde nommee de l'etat actuel. L'autosave locale reste active en arriere-plan.",
+                        "Crée une sauvegarde nommée de l'état actuel. La sauvegarde automatique reste active en arrière-plan.",
                     )
                     .size(14.0)
                     .color(colors.text_secondary),
@@ -1132,14 +1173,14 @@ impl MyApp {
                 let response = dialog_text_input(
                     ui,
                     &mut self.named_save_name_input,
-                    "Ex. Route Glours solo",
+                    "Ex. Donjon des Blops en solo",
                 );
                 let submit_with_enter =
                     response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
 
                 ui.add_space(12.0);
                 ui.label(
-                    egui::RichText::new("Resume de l'etat actuel")
+                    egui::RichText::new("Résumé de l'état actuel")
                         .size(12.0)
                         .strong()
                         .color(colors.text_primary),
@@ -1201,11 +1242,13 @@ impl MyApp {
             .resizable(true)
             .default_width(760.0)
             .default_height(560.0)
+            .max_width((ctx.screen_rect().width() - 48.0).max(300.0))
+            .max_height((ctx.screen_rect().height() - 64.0).max(300.0))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(
-                            "Sauvegardes nommees triees de la plus recente a la plus ancienne.",
+                            "Sauvegardes nommées, de la plus récente à la plus ancienne.",
                         )
                         .size(14.0)
                         .color(colors.text_secondary),
@@ -1231,13 +1274,14 @@ impl MyApp {
 
                 if named_saves.is_empty() {
                     ui.label(
-                        egui::RichText::new("Aucune sauvegarde nommee disponible pour le moment.")
+                        egui::RichText::new("Aucune sauvegarde nommée disponible pour le moment.")
                             .size(13.0)
                             .color(colors.text_secondary),
                     );
                 } else {
                     egui::ScrollArea::vertical()
                         .auto_shrink([true, false])
+                        .max_height((ui.available_height() - 52.0).max(120.0))
                         .show(ui, |ui| {
                             for save in named_saves {
                                 let rename_open = self
@@ -1251,17 +1295,18 @@ impl MyApp {
                                     .rounding(12.0)
                                     .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                                     .show(ui, |ui| {
-                                        ui.horizontal_top(|ui| {
+                                        ui.vertical(|ui| {
+                                            // Je réserve une ligne entière au nom pour garder les actions accessibles.
                                             ui.vertical(|ui| {
-                                                ui.label(
+                                                ui.add(egui::Label::new(
                                                     egui::RichText::new(&save.meta.display_name)
                                                         .size(16.0)
                                                         .strong()
                                                         .color(colors.text_primary),
-                                                );
+                                                ).wrap());
                                                 ui.label(
                                                     egui::RichText::new(format!(
-                                                        "Mis a jour le {}",
+                                                        "Mis à jour le {}",
                                                         format_named_save_updated_at(
                                                             save.meta.updated_at
                                                         )
@@ -1288,24 +1333,22 @@ impl MyApp {
                                                 }
                                             });
 
-                                            ui.with_layout(
-                                                egui::Layout::right_to_left(egui::Align::Min),
-                                                |ui| {
-                                                    if danger_button(ui, "Supprimer").clicked() {
-                                                        delete_action =
+                                            ui.add_space(8.0);
+                                            ui.horizontal_wrapped(|ui| {
+                                                    if primary_button(ui, "Charger").clicked() {
+                                                        load_action =
                                                             Some(save.meta.save_id.clone());
                                                     }
 
                                                     if rename_open {
-                                                        if secondary_button(ui, "Annuler").clicked()
-                                                        {
-                                                            cancel_rename = true;
-                                                        }
-
                                                         if primary_button(ui, "Enregistrer")
                                                             .clicked()
                                                         {
                                                             save_rename = true;
+                                                        }
+                                                        if secondary_button(ui, "Annuler").clicked()
+                                                        {
+                                                            cancel_rename = true;
                                                         }
                                                     } else if secondary_button(ui, "Renommer")
                                                         .clicked()
@@ -1314,12 +1357,11 @@ impl MyApp {
                                                             Some(save.meta.save_id.clone());
                                                     }
 
-                                                    if primary_button(ui, "Charger").clicked() {
-                                                        load_action =
+                                                    if danger_button(ui, "Supprimer").clicked() {
+                                                        delete_action =
                                                             Some(save.meta.save_id.clone());
                                                     }
-                                                },
-                                            );
+                                            });
                                         });
 
                                         if rename_open {
@@ -1408,26 +1450,19 @@ impl MyApp {
                 egui::Frame::none()
                     .fill(colors.surface)
                     .stroke(egui::Stroke::new(1.0, colors.border))
-                    .rounding(14.0)
-                    .inner_margin(egui::Margin::symmetric(14.0, 12.0))
+                    .rounding(10.0)
+                    .inner_margin(egui::Margin::symmetric(18.0, 14.0))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 12.0;
-
-                                if let Some(texture) = self.app_icon_texture.as_ref() {
-                                    ui.add(
-                                        egui::Image::from_texture(texture)
-                                            .fit_to_exact_size(egui::vec2(
-                                                HEADER_LOGO_SIZE,
-                                                HEADER_LOGO_SIZE,
-                                            ))
-                                            .rounding(12.0),
-                                    );
-                                }
-
+                                ui.spacing_mut().item_spacing.x = 18.0;
+                                brand_medallion(ui, self.app_icon_texture.as_ref());
                                 ui.vertical(|ui| {
-                                    render_brand_title(ui, APP_NAME);
+                                    ui.horizontal(|ui| {
+                                        render_brand_title(ui, APP_NAME);
+                                        ui.label(egui::RichText::new("DOFUS RÉTRO").size(11.0).strong().color(colors.accent));
+                                    });
+                                    ui.label(egui::RichText::new("Compagnon de farm pour Dofus Retro").size(13.0).color(colors.silver));
                                 });
                             });
 
@@ -1441,18 +1476,28 @@ impl MyApp {
                                 }
 
                                 let options_menu = ui.menu_button(
-                                    egui::RichText::new("⚙")
-                                        .size(20.0)
+                                    egui::RichText::new("Options")
+                                        .size(13.0)
                                         .strong()
                                         .color(colors.text_primary),
                                     |ui| {
                                         ui.set_min_width(240.0);
 
+                                        let save_response = primary_button(ui, "Sauvegarder l'état");
+                                        let save_clicked = save_response.clicked();
+                                        save_response.on_hover_text(
+                                            "Sauvegarde les données validées et les brouillons en cours.",
+                                        );
+                                        if save_clicked {
+                                            self.save();
+                                            ui.close_menu();
+                                        }
+
                                         let reload_response =
                                             secondary_button(ui, "Recharger l'autosave");
                                         let reload_clicked = reload_response.clicked();
                                         reload_response.on_hover_text(
-                                            "Recharge la derniere sauvegarde locale disponible.",
+                                            "Recharge la dernière sauvegarde locale disponible.",
                                         );
                                         if reload_clicked {
                                             self.request_reload_local();
@@ -1463,7 +1508,7 @@ impl MyApp {
                                             secondary_button(ui, "Importer un fichier JSON");
                                         let import_clicked = import_response.clicked();
                                         import_response.on_hover_text(
-                                            "Importe un fichier JSON puis met a jour la sauvegarde locale.",
+                                            "Importe un fichier JSON puis met à jour la sauvegarde locale.",
                                         );
                                         if import_clicked {
                                             ui.close_menu();
@@ -1477,10 +1522,10 @@ impl MyApp {
 
                                         ui.separator();
 
-                                        let clear_response = secondary_button(ui, "Effacer l'etat");
+                                        let clear_response = secondary_button(ui, "Effacer l'état");
                                         let clear_clicked = clear_response.clicked();
                                         clear_response.on_hover_text(
-                                            "Vide seulement l'etat affiche.",
+                                            "Vide seulement l'état affiché.",
                                         );
                                         if clear_clicked {
                                             self.open_clear_state_dialog();
@@ -1491,7 +1536,7 @@ impl MyApp {
                                             danger_button(ui, "Supprimer l'autosave");
                                         let delete_clicked = delete_response.clicked();
                                         delete_response.on_hover_text(
-                                            "Supprime definitivement data.json et son fichier .bak.",
+                                            "Supprime les fichiers principaux et de secours des versions reconnues.",
                                         );
                                         if delete_clicked {
                                             self.open_delete_local_save_dialog();
@@ -1511,13 +1556,15 @@ impl MyApp {
                         }
 
                         ui.add_space(10.0);
+                        ornamental_divider(ui);
+                        ui.add_space(5.0);
                         clamped_wrapped_row(ui, |ui| {
                             styled_tab_button(ui, &mut self.current_tab, Tab::Bilans, "Bilans");
                             styled_tab_button(
                                 ui,
                                 &mut self.current_tab,
                                 Tab::RechercheActivite,
-                                "Recherche d'activite",
+                                "Recherche d'activité",
                             );
                             styled_tab_button(ui, &mut self.current_tab, Tab::Zones, "Zones");
                             styled_tab_button(ui, &mut self.current_tab, Tab::Donjons, "Donjons");
@@ -1527,7 +1574,7 @@ impl MyApp {
                                 Tab::DuoTrio,
                                 "Duo / Trio",
                             );
-                            styled_tab_button(ui, &mut self.current_tab, Tab::PlArene, "PL arene");
+                            styled_tab_button(ui, &mut self.current_tab, Tab::PlArene, "PL arène");
                         });
                     });
             });
@@ -1538,19 +1585,19 @@ impl MyApp {
         let summary =
             build_report_summary(&self.data, self.report_period, self.report_categories, now);
 
+        self.render_bilans_overview(ui, &summary);
+        ui.add_space(SECTION_GAP);
+
         section_frame(
             ui,
             "Graphique des gains",
-            "Courbes cumulees par categorie ou batons temporels par session.",
+            "Courbes cumulées par catégorie ou bâtons temporels par session.",
             |ui| {
                 self.render_report_controls(ui);
                 ui.add_space(8.0);
                 self.render_report_chart(ui, &summary);
             },
         );
-
-        ui.add_space(6.0);
-        self.render_bilans_overview(ui, &summary);
 
         if !can_fit_two_columns(
             ui.available_width(),
@@ -1560,22 +1607,22 @@ impl MyApp {
             ui.add_space(10.0);
             section_frame(
                 ui,
-                "Top activites",
-                "Cumuls nets par activite et meilleure session sur la periode visible.",
+                "Top activités",
+                "Cumuls nets par activité et meilleure session sur la période visible.",
                 |ui| self.render_top_activities(ui, &summary),
             );
             ui.add_space(10.0);
             section_frame(
                 ui,
                 "Bilan par classe",
-                "Lecture comptable par classe sur les sessions horodatees visibles.",
+                "Lecture comptable par classe sur les sessions horodatées visibles.",
                 |ui| self.render_class_summaries(ui, &summary),
             );
             ui.add_space(10.0);
             section_frame(
                 ui,
-                "Sessions recentes",
-                "Historique detaille, date+heure et gain net des saisies visibles.",
+                "Sessions récentes",
+                "Historique détaillé, date+heure et gain net des saisies visibles.",
                 |ui| self.render_recent_sessions(ui, &summary),
             );
             return;
@@ -1590,14 +1637,16 @@ impl MyApp {
         );
 
         ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             ui.allocate_ui_with_layout(
                 egui::vec2(left_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
                     section_frame(
                         ui,
-                        "Top activites",
-                        "Cumuls nets par activite et meilleure session sur la periode visible.",
+                        "Top activités",
+                        "Cumuls nets par activité et meilleure session sur la période visible.",
                         |ui| self.render_top_activities(ui, &summary),
                     );
                 },
@@ -1607,10 +1656,11 @@ impl MyApp {
                 egui::vec2(right_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
                     section_frame(
                         ui,
                         "Bilan par classe",
-                        "Lecture comptable par classe sur les sessions horodatees visibles.",
+                        "Lecture comptable par classe sur les sessions horodatées visibles.",
                         |ui| self.render_class_summaries(ui, &summary),
                     );
                 },
@@ -1620,8 +1670,8 @@ impl MyApp {
         ui.add_space(10.0);
         section_frame(
             ui,
-            "Sessions recentes",
-            "Historique detaille, date+heure et gain net des saisies visibles.",
+            "Sessions récentes",
+            "Historique détaillé, date+heure et gain net des saisies visibles.",
             |ui| self.render_recent_sessions(ui, &summary),
         );
     }
@@ -1662,10 +1712,12 @@ impl MyApp {
         );
 
         ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             ui.allocate_ui_with_layout(
                 egui::vec2(left_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
                     section_frame(ui, filter_title, filter_subtitle, |ui| {
                         self.render_activity_search_filters(ui);
                     });
@@ -1687,6 +1739,7 @@ impl MyApp {
                 egui::vec2(right_width, 0.0),
                 egui::Layout::top_down(egui::Align::Min),
                 |ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
                     self.render_activity_search_results(
                         ui,
                         &groups,
@@ -1740,9 +1793,9 @@ impl MyApp {
         self.render_responsive_sections(
             ui,
             "Ajouter un run duo/trio",
-            "Capture pleine, loot et couts du run.",
+            "Capture pleine, loot et coûts du run.",
             "Classement duo/trio",
-            "Comparaison compacte des runs captures.",
+            "Comparaison compacte des runs capturés.",
             |ui, app| app.render_duo_trio_form(ui),
             |ui, app| app.render_duo_trio_list(ui),
         );
@@ -1756,9 +1809,9 @@ impl MyApp {
         ui.add_space(14.0);
         self.render_responsive_sections(
             ui,
-            "Ajouter un PL arene",
+            "Ajouter un PL arène",
             "Ronde, places et captures.",
-            "Classement du PL arene",
+            "Classement du PL arène",
             "Comparaison compacte des sessions.",
             |ui, app| app.render_arena_form(ui),
             |ui, app| app.render_arena_list(ui),
@@ -1787,18 +1840,15 @@ impl MyApp {
                 right_content(ui, self)
             });
         } else {
-            let (left_width, right_width) = split_two_column_widths(
-                ui.available_width(),
-                0.39,
-                FORM_PANEL_MIN_WIDTH,
-                LIST_PANEL_MIN_WIDTH,
-            );
+            let (left_width, right_width) = split_form_list_widths(ui.available_width());
 
             ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
                 ui.allocate_ui_with_layout(
                     egui::vec2(left_width, 0.0),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
                         section_frame(ui, left_title, left_subtitle, |ui| left_content(ui, self));
                     },
                 );
@@ -1807,6 +1857,7 @@ impl MyApp {
                     egui::vec2(right_width, 0.0),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
                         section_frame(ui, right_title, right_subtitle, |ui| {
                             right_content(ui, self)
                         });
@@ -1837,7 +1888,7 @@ impl MyApp {
 
         class_selector(
             ui,
-            "Classe jouee",
+            "Classe jouée",
             &mut self.activity_search_class,
             &self.class_textures,
         );
@@ -1848,7 +1899,7 @@ impl MyApp {
                 self.activity_search_class = None;
             }
 
-            if secondary_button(ui, "Reinitialiser les filtres").clicked() {
+            if secondary_button(ui, "Réinitialiser les filtres").clicked() {
                 self.activity_search_class = None;
                 self.activity_search_time = DurationInput::default();
                 self.activity_search_time_touched = false;
@@ -1898,11 +1949,13 @@ impl MyApp {
         for (row_index, row) in groups.chunks(columns).enumerate() {
             clamped_content(ui, |ui| {
                 ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
                     for (index, group) in row.iter().enumerate() {
                         ui.allocate_ui_with_layout(
                             egui::vec2(card_width, 0.0),
                             egui::Layout::top_down(egui::Align::Min),
                             |ui| {
+                                ui.spacing_mut().item_spacing.x = 10.0;
                                 self.render_activity_search_group(ui, group, show_time_projection);
                             },
                         );
@@ -1930,7 +1983,7 @@ impl MyApp {
         ui.set_max_width(ui.available_width());
 
         let subtitle = if show_time_projection {
-            "Top 3 par gain estime sur la duree disponible."
+            "Top 3 par gain estimé sur la durée disponible."
         } else {
             "Top 3 historique par kamas/h moyen."
         };
@@ -1941,8 +1994,8 @@ impl MyApp {
                     empty_state(
                         ui,
                         true,
-                        "Aucune activite exploitable avec ces filtres.",
-                        "Aucune activite exploitable avec ces filtres.",
+                        "Aucune activité exploitable avec ces filtres.",
+                        "Aucune activité exploitable avec ces filtres.",
                     );
                     return;
                 }
@@ -1982,7 +2035,7 @@ impl MyApp {
         egui::Frame::none()
             .fill(colors.surface_alt)
             .stroke(egui::Stroke::new(1.0, stroke))
-            .rounding(14.0)
+            .rounding(10.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -2013,7 +2066,7 @@ impl MyApp {
                     vec![
                         ("Sessions", item.session_count.to_string()),
                         (
-                            "Duree moy.",
+                            "Durée moy.",
                             format_duration_hms(item.average_duration_seconds),
                         ),
                         (
@@ -2035,9 +2088,9 @@ impl MyApp {
                         ui,
                         compact_metrics,
                         vec![
-                            ("Runs realisables", estimated_runs.to_string()),
+                            ("Runs réalisables", estimated_runs.to_string()),
                             (
-                                "Gain estime",
+                                "Gain estimé",
                                 format!("{} kamas", format_kamas(estimated_total_value)),
                             ),
                         ],
@@ -2057,17 +2110,41 @@ impl MyApp {
             .unwrap_or_else(|| "Aucune donnée".to_string());
         let count = summary.count.to_string();
 
-        clamped_wrapped_row(ui, |ui| {
-            kpi_card(ui, "Meilleur", &best, PreviewTone::Positive);
-            kpi_card(ui, "Moyenne", &average, PreviewTone::Accent);
-            kpi_card(ui, "Entrees", &count, PreviewTone::Neutral);
-        });
+        let cards = [
+            ("Meilleur rendement", best.as_str(), PreviewTone::Positive),
+            ("Rendement moyen", average.as_str(), PreviewTone::Accent),
+            (
+                "Sessions enregistrées",
+                count.as_str(),
+                PreviewTone::Neutral,
+            ),
+        ];
+        let columns = responsive_columns(ui.available_width(), 250.0, SECTION_GAP, 3);
+        let width = grid_item_width(ui.available_width(), columns, SECTION_GAP);
+        for row in cards.chunks(columns) {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                for (index, (label, value, tone)) in row.iter().enumerate() {
+                    if index > 0 {
+                        ui.add_space(SECTION_GAP);
+                    }
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0;
+                            kpi_card(ui, label, value, *tone);
+                        },
+                    );
+                }
+            });
+        }
     }
 
     fn render_report_controls(&mut self, ui: &mut egui::Ui) {
         clamped_wrapped_row(ui, |ui| {
             ui.label(
-                egui::RichText::new("Periode")
+                egui::RichText::new("Période")
                     .size(12.0)
                     .color(theme::palette().text_secondary),
             );
@@ -2093,31 +2170,31 @@ impl MyApp {
                 ui,
                 &mut self.report_period,
                 ReportPeriod::AllTime,
-                "Depuis le debut",
+                "Depuis le début",
             );
         });
 
         ui.add_space(6.0);
         clamped_wrapped_row(ui, |ui| {
             ui.label(
-                egui::RichText::new("Categories")
+                egui::RichText::new("Catégories")
                     .size(12.0)
                     .color(theme::palette().text_secondary),
             );
             toggle_multi_chip_button(ui, &mut self.report_categories.zones, "Zones");
             toggle_multi_chip_button(ui, &mut self.report_categories.dungeons, "Donjons");
             toggle_multi_chip_button(ui, &mut self.report_categories.duo_trios, "Duo / Trio");
-            toggle_multi_chip_button(ui, &mut self.report_categories.arenas, "PL arene");
+            toggle_multi_chip_button(ui, &mut self.report_categories.arenas, "PL arène");
         });
 
         ui.add_space(6.0);
         clamped_wrapped_row(ui, |ui| {
-            ui.checkbox(&mut self.report_bar_mode, "Mode baton");
+            ui.checkbox(&mut self.report_bar_mode, "Mode bâton");
             ui.label(
                 egui::RichText::new(if self.report_bar_mode {
-                    "Chevauchements empiles automatiquement par creneau temporel."
+                    "Chevauchements empiles automatiquement par créneau temporel."
                 } else {
-                    "Courbes cumulees affichees par defaut."
+                    "Courbes cumulées affichées par defaut."
                 })
                 .size(11.0)
                 .color(theme::palette().text_secondary),
@@ -2126,7 +2203,7 @@ impl MyApp {
 
         ui.add_space(6.0);
         ui.label(
-            egui::RichText::new("Filtres globaux du bilan. Sessions horodatees uniquement.")
+            egui::RichText::new("Filtres globaux du bilan. Sessions horodatées uniquement.")
                 .size(11.0)
                 .color(theme::palette().text_secondary),
         );
@@ -2137,12 +2214,12 @@ impl MyApp {
         let average = summary
             .average_per_session
             .map(|value| format!("{} kamas", format_kamas(value)))
-            .unwrap_or_else(|| "Aucune donnee".to_string());
+            .unwrap_or_else(|| "Aucune donnée".to_string());
         let best_session_value = summary
             .best_session
             .as_ref()
             .map(|session| format!("{} kamas", format_kamas(session.accounting_value)))
-            .unwrap_or_else(|| "Aucune donnee".to_string());
+            .unwrap_or_else(|| "Aucune donnée".to_string());
         let best_session_detail = summary
             .best_session
             .as_ref()
@@ -2155,13 +2232,13 @@ impl MyApp {
                 )
             })
             .unwrap_or_else(|| {
-                "Ajoutez des sessions horodatees pour alimenter le bilan.".to_string()
+                "Ajoutez des sessions horodatées pour alimenter le bilan.".to_string()
             });
         let best_activity_value = summary
             .best_activity
             .as_ref()
             .map(|activity| activity.name.clone())
-            .unwrap_or_else(|| "Aucune donnee".to_string());
+            .unwrap_or_else(|| "Aucune donnée".to_string());
         let best_activity_detail = summary
             .best_activity
             .as_ref()
@@ -2173,7 +2250,7 @@ impl MyApp {
                     activity.sessions
                 )
             })
-            .unwrap_or_else(|| "Aucune activite agregee pour le filtre actif.".to_string());
+            .unwrap_or_else(|| "Aucune activité agrégée pour le filtre actif.".to_string());
 
         let cards = [
             (
@@ -2189,10 +2266,10 @@ impl MyApp {
                 },
             ),
             (
-                "Total cumule",
+                "Total cumulé",
                 PreviewBlock {
                     value: total_earned,
-                    detail: "Somme nette des sessions horodatees visibles.".to_string(),
+                    detail: "Somme nette des sessions horodatées visibles.".to_string(),
                     tone: if summary.total_earned >= 0.0 {
                         PreviewTone::Accent
                     } else {
@@ -2222,12 +2299,12 @@ impl MyApp {
                 "Moyenne / session",
                 PreviewBlock {
                     value: average,
-                    detail: "Gain moyen par session horodatee visible.".to_string(),
+                    detail: "Gain moyen par session horodatée visible.".to_string(),
                     tone: PreviewTone::Accent,
                 },
             ),
             (
-                "Activite dominante",
+                "Activité dominante",
                 PreviewBlock {
                     value: best_activity_value,
                     detail: best_activity_detail,
@@ -2249,11 +2326,13 @@ impl MyApp {
         for (row_index, row) in cards.chunks(columns).enumerate() {
             clamped_content(ui, |ui| {
                 ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
                     for (index, (title, preview)) in row.iter().enumerate() {
                         ui.allocate_ui_with_layout(
                             egui::vec2(card_width, 0.0),
                             egui::Layout::top_down(egui::Align::Min),
                             |ui| {
+                                ui.spacing_mut().item_spacing.x = 10.0;
                                 preview_card_sized(ui, title, preview, card_width);
                             },
                         );
@@ -2276,8 +2355,8 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Activez au moins une categorie pour tracer le graphique.",
-                "Activez au moins une categorie pour tracer le graphique.",
+                "Activez au moins une catégorie pour tracer le graphique.",
+                "Activez au moins une catégorie pour tracer le graphique.",
             );
             return;
         }
@@ -2298,8 +2377,8 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Aucune session horodatee visible dans cette periode.",
-                "Aucune session horodatee visible dans cette periode.",
+                "Aucune session horodatée visible dans cette période.",
+                "Aucune session horodatée visible dans cette période.",
             );
             return;
         }
@@ -2314,7 +2393,7 @@ impl MyApp {
     fn render_timeline_bar_chart(&self, ui: &mut egui::Ui, summary: &ReportSummary) {
         ui.label(
             egui::RichText::new(
-                "Survolez un baton pour voir la session, sa duree et les empilements sur le meme creneau.",
+                "Survolez un bâton pour voir la session, sa durée et les empilements sur le même créneau.",
             )
             .size(11.0)
             .color(theme::palette().text_secondary),
@@ -2330,8 +2409,8 @@ impl MyApp {
             .show_axes([true, true])
             .include_y(0.0)
             .label_formatter(|_, _| String::new())
-            .x_axis_formatter(|mark, _, range| format_plot_time_mark(mark.value, range))
-            .y_axis_formatter(|mark, _, _| format_plot_kamas_mark(mark.value));
+            .x_axis_formatter(|mark, range| format_plot_time_mark(mark.value, range))
+            .y_axis_formatter(|mark, _| format_plot_kamas_mark(mark.value));
 
         if let Some(start_at) = summary.period_started_at {
             plot = plot.include_x(datetime_to_plot_x(start_at));
@@ -2368,8 +2447,8 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Activez au moins une categorie pour tracer la courbe.",
-                "Activez au moins une categorie pour tracer la courbe.",
+                "Activez au moins une catégorie pour tracer la courbe.",
+                "Activez au moins une catégorie pour tracer la courbe.",
             );
             return;
         }
@@ -2382,14 +2461,14 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Aucune session horodatee visible dans cette periode.",
-                "Aucune session horodatee visible dans cette periode.",
+                "Aucune session horodatée visible dans cette période.",
+                "Aucune session horodatée visible dans cette période.",
             );
             return;
         }
 
         ui.label(
-            egui::RichText::new("Survolez un point pour voir ce qui a ete farme a cet instant.")
+            egui::RichText::new("Survolez un point pour retrouver le détail de la session.")
                 .size(11.0)
                 .color(theme::palette().text_secondary),
         );
@@ -2399,8 +2478,8 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Aucune session horodatee visible dans cette periode.",
-                "Aucune session horodatee visible dans cette periode.",
+                "Aucune session horodatée visible dans cette période.",
+                "Aucune session horodatée visible dans cette période.",
             );
             return;
         };
@@ -2413,8 +2492,8 @@ impl MyApp {
             .allow_drag(false)
             .show_axes([true, true])
             .label_formatter(|_, _| String::new())
-            .x_axis_formatter(|mark, _, range| format_plot_time_mark(mark.value, range))
-            .y_axis_formatter(|mark, _, _| format_plot_kamas_mark(mark.value))
+            .x_axis_formatter(|mark, range| format_plot_time_mark(mark.value, range))
+            .y_axis_formatter(|mark, _| format_plot_kamas_mark(mark.value))
             .include_x(min_x)
             .include_x(max_x)
             .include_y(0.0)
@@ -2526,54 +2605,60 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Aucune activite a comparer.",
-                "Aucune activite a comparer.",
+                "Aucune activité à comparer.",
+                "Aucune activité à comparer.",
             );
             return;
         }
 
-        egui::Grid::new("bilans_top_activities_grid")
-            .num_columns(6)
-            .spacing(egui::vec2(12.0, 8.0))
-            .striped(true)
+        egui::ScrollArea::horizontal()
+            .id_source("bilans_top_activities_grid-scroll")
+            .auto_shrink([false, true])
+            .max_width(ui.available_width())
             .show(ui, |ui| {
-                table_header(ui, "Activite");
-                table_header(ui, "Type");
-                table_header(ui, "Classe");
-                table_header(ui, "Total");
-                table_header(ui, "Meilleur");
-                table_header(ui, "Sessions");
-                ui.end_row();
+                egui::Grid::new("bilans_top_activities_grid")
+                    .num_columns(6)
+                    .spacing(egui::vec2(12.0, 8.0))
+                    .striped(true)
+                    .show(ui, |ui| {
+                        table_header(ui, "Activité");
+                        table_header(ui, "Type");
+                        table_header(ui, "Classe");
+                        table_header(ui, "Total");
+                        table_header(ui, "Meilleur");
+                        table_header(ui, "Sessions");
+                        ui.end_row();
 
-                for activity in summary.top_activities.iter().take(REPORT_TABLE_LIMIT) {
-                    ui.label(activity.name.clone());
-                    muted_text(ui, activity.kind.singular_label());
-                    muted_text(
-                        ui,
-                        activity
-                            .best_class
-                            .map(DofusClass::label)
-                            .unwrap_or("Inconnue"),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} kamas",
-                            format_kamas(activity.total_value)
-                        ))
-                        .monospace()
-                        .color(profit_color(activity.total_value)),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{} kamas",
-                            format_kamas(activity.best_session)
-                        ))
-                        .monospace()
-                        .color(profit_color(activity.best_session)),
-                    );
-                    muted_text(ui, &activity.sessions.to_string());
-                    ui.end_row();
-                }
+                        for activity in summary.top_activities.iter().take(REPORT_TABLE_LIMIT) {
+                            ui.label(activity.name.clone());
+                            muted_text(ui, activity.kind.singular_label());
+                            muted_text(
+                                ui,
+                                activity
+                                    .best_class
+                                    .map(DofusClass::label)
+                                    .unwrap_or("Inconnue"),
+                            );
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} kamas",
+                                    format_kamas(activity.total_value)
+                                ))
+                                .monospace()
+                                .color(profit_color(activity.total_value)),
+                            );
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} kamas",
+                                    format_kamas(activity.best_session)
+                                ))
+                                .monospace()
+                                .color(profit_color(activity.best_session)),
+                            );
+                            muted_text(ui, &activity.sessions.to_string());
+                            ui.end_row();
+                        }
+                    });
             });
     }
 
@@ -2588,34 +2673,43 @@ impl MyApp {
             return;
         }
 
-        egui::Grid::new("bilans_class_summary_grid")
-            .num_columns(5)
-            .spacing(egui::vec2(12.0, 8.0))
-            .striped(true)
+        egui::ScrollArea::horizontal()
+            .id_source("bilans_class_summary_grid-scroll")
+            .auto_shrink([false, true])
+            .max_width(ui.available_width())
             .show(ui, |ui| {
-                table_header(ui, "Classe");
-                table_header(ui, "Sessions");
-                table_header(ui, "Total");
-                table_header(ui, "Meilleur");
-                table_header(ui, "Type fort");
-                ui.end_row();
+                egui::Grid::new("bilans_class_summary_grid")
+                    .num_columns(5)
+                    .spacing(egui::vec2(12.0, 8.0))
+                    .striped(true)
+                    .show(ui, |ui| {
+                        table_header(ui, "Classe");
+                        table_header(ui, "Sessions");
+                        table_header(ui, "Total");
+                        table_header(ui, "Meilleur");
+                        table_header(ui, "Type fort");
+                        ui.end_row();
 
-                for item in &summary.class_summaries {
-                    ui.label(item.class.label());
-                    muted_text(ui, &item.sessions.to_string());
-                    ui.label(
-                        egui::RichText::new(format!("{} kamas", format_kamas(item.total_value)))
-                            .monospace()
-                            .color(profit_color(item.total_value)),
-                    );
-                    ui.label(
-                        egui::RichText::new(format!("{} kamas", format_kamas(item.best)))
-                            .monospace()
-                            .color(profit_color(item.best)),
-                    );
-                    muted_text(ui, item.best_kind.singular_label());
-                    ui.end_row();
-                }
+                        for item in &summary.class_summaries {
+                            ui.label(item.class.label());
+                            muted_text(ui, &item.sessions.to_string());
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{} kamas",
+                                    format_kamas(item.total_value)
+                                ))
+                                .monospace()
+                                .color(profit_color(item.total_value)),
+                            );
+                            ui.label(
+                                egui::RichText::new(format!("{} kamas", format_kamas(item.best)))
+                                    .monospace()
+                                    .color(profit_color(item.best)),
+                            );
+                            muted_text(ui, item.best_kind.singular_label());
+                            ui.end_row();
+                        }
+                    });
             });
     }
 
@@ -2624,8 +2718,8 @@ impl MyApp {
             empty_state(
                 ui,
                 true,
-                "Aucune session recente pour ce filtre.",
-                "Aucune session recente pour ce filtre.",
+                "Aucune session récente pour ce filtre.",
+                "Aucune session récente pour ce filtre.",
             );
             return;
         }
@@ -2636,10 +2730,31 @@ impl MyApp {
             egui::Frame::none()
                 .fill(colors.surface_alt)
                 .stroke(egui::Stroke::new(1.0, colors.border))
-                .rounding(14.0)
+                .rounding(10.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                 .show(ui, |ui| {
-                    if ui.available_width() < CARD_HEADER_STACK_BREAKPOINT {
+                    let title_width = ui
+                        .painter()
+                        .layout_no_wrap(
+                            session.name.clone(),
+                            egui::FontId::proportional(15.0),
+                            colors.text_primary,
+                        )
+                        .size()
+                        .x;
+                    let amount_width = ui
+                        .painter()
+                        .layout_no_wrap(
+                            format!("{} kamas", format_kamas(session.accounting_value)),
+                            egui::FontId::monospace(16.0),
+                            profit_color(session.accounting_value),
+                        )
+                        .size()
+                        .x;
+                    if ui.available_width() < CARD_HEADER_STACK_BREAKPOINT
+                        || title_width + amount_width + ui.spacing().item_spacing.x
+                            > ui.available_width()
+                    {
                         ui.vertical(|ui| {
                             ui.label(
                                 egui::RichText::new(session.name.clone())
@@ -2680,21 +2795,18 @@ impl MyApp {
                                 );
                             });
 
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new(format!(
-                                            "{} kamas",
-                                            format_kamas(session.accounting_value)
-                                        ))
-                                        .monospace()
-                                        .size(16.0)
-                                        .strong()
-                                        .color(profit_color(session.accounting_value)),
-                                    );
-                                },
-                            );
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} kamas",
+                                        format_kamas(session.accounting_value)
+                                    ))
+                                    .monospace()
+                                    .size(16.0)
+                                    .strong()
+                                    .color(profit_color(session.accounting_value)),
+                                );
+                            });
                         });
                     }
 
@@ -2934,7 +3046,7 @@ impl MyApp {
 
         changed |= class_selector(
             ui,
-            "Classe jouee",
+            "Classe jouée",
             &mut self.zone_form.character_class,
             &self.class_textures,
         );
@@ -2961,7 +3073,7 @@ impl MyApp {
             "Valeur totale mise en vente",
             &mut self.zone_form.session_total_kamas,
             "kamas",
-            "Valeur brute estimee des ressources de la session.",
+            "Valeur brute estimée des ressources de la session.",
         );
         has_focus |= response.has_focus();
         changed |= response.changed();
@@ -3001,7 +3113,7 @@ impl MyApp {
 
         changed |= class_selector(
             ui,
-            "Classe jouee",
+            "Classe jouée",
             &mut self.dungeon_form.character_class,
             &self.class_textures,
         );
@@ -3072,7 +3184,7 @@ impl MyApp {
 
         let response = form_field_row(
             ui,
-            "Nom / reference",
+            "Nom / référence",
             &mut self.duo_trio_form.name,
             "",
             "Exemple : Duo Qu'Tan, Trio Illy...",
@@ -3082,7 +3194,7 @@ impl MyApp {
 
         changed |= class_selector(
             ui,
-            "Classe jouee",
+            "Classe jouée",
             &mut self.duo_trio_form.character_class,
             &self.class_textures,
         );
@@ -3185,7 +3297,7 @@ impl MyApp {
 
         changed |= class_selector(
             ui,
-            "Classe jouee",
+            "Classe jouée",
             &mut self.arena_form.character_class,
             &self.class_textures,
         );
@@ -3261,7 +3373,7 @@ impl MyApp {
 
         let submit_with_enter = has_focus && ui.input(|input| input.key_pressed(egui::Key::Enter));
         ui.add_space(10.0);
-        if wide_primary_button(ui, "Ajouter le PL arene").clicked() || submit_with_enter {
+        if wide_primary_button(ui, "Ajouter le PL arène").clicked() || submit_with_enter {
             self.submit_arena_form();
         }
     }
@@ -3315,7 +3427,7 @@ impl MyApp {
             egui::Frame::none()
                 .fill(colors.surface_alt)
                 .stroke(egui::Stroke::new(1.0, colors.border))
-                .rounding(14.0)
+                .rounding(10.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                 .show(ui, |ui| {
                     let compact_metrics = ui.available_width() < CARD_COMPACT_METRICS_BREAKPOINT;
@@ -3460,7 +3572,7 @@ impl MyApp {
             egui::Frame::none()
                 .fill(colors.surface_alt)
                 .stroke(egui::Stroke::new(1.0, colors.border))
-                .rounding(14.0)
+                .rounding(10.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                 .show(ui, |ui| {
                     let _compact_metrics = ui.available_width() < CARD_COMPACT_METRICS_BREAKPOINT;
@@ -3583,7 +3695,7 @@ impl MyApp {
                 ui,
                 self.data.duo_trios.is_empty(),
                 "Aucun run duo/trio enregistre.",
-                "Aucun run duo/trio ne correspond a cette recherche.",
+                "Aucun run duo/trio ne correspond à cette recherche.",
             );
             return;
         }
@@ -3614,7 +3726,7 @@ impl MyApp {
             egui::Frame::none()
                 .fill(colors.surface_alt)
                 .stroke(egui::Stroke::new(1.0, colors.border))
-                .rounding(14.0)
+                .rounding(10.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                 .show(ui, |ui| {
                     let compact_metrics = ui.available_width() < CARD_COMPACT_METRICS_BREAKPOINT;
@@ -3780,7 +3892,7 @@ impl MyApp {
             egui::Frame::none()
                 .fill(colors.surface_alt)
                 .stroke(egui::Stroke::new(1.0, colors.border))
-                .rounding(14.0)
+                .rounding(10.0)
                 .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                 .show(ui, |ui| {
                     let _compact_metrics = ui.available_width() < CARD_COMPACT_METRICS_BREAKPOINT;
@@ -3900,7 +4012,7 @@ impl MyApp {
         egui::Frame::none()
             .fill(colors.surface_alt)
             .stroke(egui::Stroke::new(1.0, colors.accent))
-            .rounding(14.0)
+            .rounding(10.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 rank_badge(ui, rank + 1);
@@ -3929,7 +4041,7 @@ impl MyApp {
 
                     changed |= class_selector(
                         ui,
-                        "Classe jouee",
+                        "Classe jouée",
                         &mut edit.form.character_class,
                         &self.class_textures,
                     );
@@ -3956,7 +4068,7 @@ impl MyApp {
                         "Valeur totale mise en vente",
                         &mut edit.form.session_total_kamas,
                         "kamas",
-                        "Valeur brute estimee de la session.",
+                        "Valeur brute estimée de la session.",
                     );
                     has_focus |= response.has_focus();
                     changed |= response.changed();
@@ -4001,7 +4113,7 @@ impl MyApp {
         egui::Frame::none()
             .fill(colors.surface_alt)
             .stroke(egui::Stroke::new(1.0, colors.accent))
-            .rounding(14.0)
+            .rounding(10.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 rank_badge(ui, rank + 1);
@@ -4030,7 +4142,7 @@ impl MyApp {
 
                     changed |= class_selector(
                         ui,
-                        "Classe jouee",
+                        "Classe jouée",
                         &mut edit.form.character_class,
                         &self.class_textures,
                     );
@@ -4107,7 +4219,7 @@ impl MyApp {
         egui::Frame::none()
             .fill(colors.surface_alt)
             .stroke(egui::Stroke::new(1.0, colors.accent))
-            .rounding(14.0)
+            .rounding(10.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 rank_badge(ui, rank + 1);
@@ -4126,17 +4238,17 @@ impl MyApp {
 
                     let response = form_field_row(
                         ui,
-                        "Nom / reference",
+                        "Nom / référence",
                         &mut edit.form.name,
                         "",
-                        "Nom du boss ou reference du run.",
+                        "Nom du boss ou référence du run.",
                     );
                     has_focus |= response.has_focus();
                     changed |= response.changed();
 
                     changed |= class_selector(
                         ui,
-                        "Classe jouee",
+                        "Classe jouée",
                         &mut edit.form.character_class,
                         &self.class_textures,
                     );
@@ -4202,7 +4314,7 @@ impl MyApp {
                     }
 
                     ui.add_space(8.0);
-                    preview_card(ui, "Prevision mise a jour", preview_duo_trio(&edit.form));
+                    preview_card(ui, "Prévision mise à jour", preview_duo_trio(&edit.form));
 
                     if let Some(error) = edit.error.as_deref() {
                         ui.add_space(8.0);
@@ -4235,7 +4347,7 @@ impl MyApp {
         egui::Frame::none()
             .fill(colors.surface_alt)
             .stroke(egui::Stroke::new(1.0, colors.accent))
-            .rounding(14.0)
+            .rounding(10.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 rank_badge(ui, rank + 1);
@@ -4264,7 +4376,7 @@ impl MyApp {
 
                     changed |= class_selector(
                         ui,
-                        "Classe jouee",
+                        "Classe jouée",
                         &mut edit.form.character_class,
                         &self.class_textures,
                     );
@@ -4362,39 +4474,188 @@ fn section_frame(
 ) {
     let colors = theme::palette();
 
-    egui::Frame::none()
+    let response = egui::Frame::none()
         .fill(colors.surface)
         .stroke(egui::Stroke::new(1.0, colors.border))
-        .rounding(14.0)
-        .inner_margin(egui::Margin::same(14.0))
+        .rounding(10.0)
+        .inner_margin(egui::Margin::same(16.0))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(title)
-                    .size(18.0)
-                    .strong()
-                    .color(colors.text_primary),
-            );
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(25.0, 28.0), egui::Sense::hover());
+                paint_rune(ui.painter(), rect.center(), 11.0, colors.accent);
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(title)
+                            .size(18.0)
+                            .strong()
+                            .color(colors.silver),
+                    )
+                    .wrap(),
+                );
+            });
             if !subtitle.is_empty() {
                 ui.label(
                     egui::RichText::new(subtitle)
-                        .size(11.0)
+                        .size(12.0)
                         .color(colors.text_secondary),
                 );
             }
+            ui.add_space(6.0);
+            ornamental_divider(ui);
             ui.add_space(8.0);
             clamped_content(ui, add_content);
         });
+    paint_frame_corners(ui.painter(), response.response.rect);
+}
+
+fn paint_rune(painter: &egui::Painter, center: egui::Pos2, radius: f32, color: egui::Color32) {
+    let vertical = egui::vec2(0.0, radius);
+    let horizontal = egui::vec2(radius * 0.53, 0.0);
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            center - vertical,
+            center + horizontal,
+            center + vertical,
+            center - horizontal,
+        ],
+        theme::palette().accent_soft,
+        egui::Stroke::new(1.0, color),
+    ));
+    painter.line_segment(
+        [center - vertical * 0.55, center + vertical * 0.55],
+        egui::Stroke::new(1.0, color),
+    );
+    painter.circle_filled(center, 2.0, color);
+}
+
+fn paint_frame_corners(painter: &egui::Painter, rect: egui::Rect) {
+    let colors = theme::palette();
+    let rect = rect.shrink(5.0);
+    let length = 15.0;
+    for (corner, x, y) in [
+        (rect.left_top(), 1.0, 1.0),
+        (rect.right_top(), -1.0, 1.0),
+        (rect.left_bottom(), 1.0, -1.0),
+        (rect.right_bottom(), -1.0, -1.0),
+    ] {
+        painter.line_segment(
+            [
+                corner + egui::vec2(x * 3.0, 0.0),
+                corner + egui::vec2(x * length, 0.0),
+            ],
+            egui::Stroke::new(1.0, colors.border_strong),
+        );
+        painter.line_segment(
+            [
+                corner + egui::vec2(0.0, y * 3.0),
+                corner + egui::vec2(0.0, y * length),
+            ],
+            egui::Stroke::new(1.0, colors.border_strong),
+        );
+    }
+}
+
+fn ornamental_divider(ui: &mut egui::Ui) {
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 7.0), egui::Sense::hover());
+    let colors = theme::palette();
+    let center = rect.center();
+    let stroke = egui::Stroke::new(1.0, colors.border);
+    ui.painter().line_segment(
+        [
+            egui::pos2(rect.left(), center.y),
+            center - egui::vec2(9.0, 0.0),
+        ],
+        stroke,
+    );
+    ui.painter().line_segment(
+        [
+            center + egui::vec2(9.0, 0.0),
+            egui::pos2(rect.right(), center.y),
+        ],
+        stroke,
+    );
+    paint_rune(ui.painter(), center, 3.0, colors.border_strong);
+}
+
+fn contain_image_size(image: egui::Vec2, bounds: egui::Vec2) -> egui::Vec2 {
+    if !image.is_finite()
+        || !bounds.is_finite()
+        || image.min_elem() <= 0.0
+        || bounds.min_elem() <= 0.0
+    {
+        return egui::Vec2::ZERO;
+    }
+    image * (bounds.x / image.x).min(bounds.y / image.y)
+}
+
+fn brand_medallion(ui: &mut egui::Ui, texture: Option<&TextureHandle>) {
+    let colors = theme::palette();
+    let (rect, _) = ui.allocate_exact_size(
+        egui::Vec2::splat(HEADER_LOGO_SIZE + 8.0),
+        egui::Sense::hover(),
+    );
+    let center = rect.center();
+    ui.painter()
+        .circle_filled(center, HEADER_LOGO_SIZE * 0.5 + 4.0, colors.card);
+    ui.painter().circle_stroke(
+        center,
+        HEADER_LOGO_SIZE * 0.5 + 3.0,
+        egui::Stroke::new(1.0, colors.border_strong),
+    );
+    ui.painter().circle_stroke(
+        center,
+        HEADER_LOGO_SIZE * 0.5 - 1.0,
+        egui::Stroke::new(1.0, colors.border),
+    );
+    if let Some(texture) = texture {
+        let size = contain_image_size(
+            texture.size_vec2(),
+            egui::Vec2::splat(HEADER_LOGO_SIZE - 4.0),
+        );
+        ui.painter().image(
+            texture.id(),
+            egui::Rect::from_center_size(center, size),
+            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
+    } else {
+        paint_rune(ui.painter(), center, 23.0, colors.accent);
+    }
+}
+
+fn background_cover_uv(image: egui::Vec2, viewport: egui::Vec2) -> egui::Rect {
+    let full = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0));
+    if !image.is_finite()
+        || !viewport.is_finite()
+        || image.min_elem() <= 0.0
+        || viewport.min_elem() <= 0.0
+    {
+        return full;
+    }
+    // Je recadre au centre sans étirer le décor, quelle que soit la taille de la fenêtre.
+    let image_ratio = image.x / image.y;
+    let viewport_ratio = viewport.x / viewport.y;
+    let visible = if image_ratio > viewport_ratio {
+        egui::vec2(viewport_ratio / image_ratio, 1.0)
+    } else {
+        egui::vec2(1.0, image_ratio / viewport_ratio)
+    };
+    egui::Rect::from_center_size(egui::pos2(0.5, 0.5), visible)
 }
 
 fn paint_background(ctx: &egui::Context, texture: Option<&egui::TextureHandle>) {
     let rect = ctx.screen_rect();
     let painter = ctx.layer_painter(egui::LayerId::background());
 
+    painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(7, 19, 34));
     if let Some(texture) = texture {
         painter.image(
             texture.id(),
             rect,
-            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
+            background_cover_uv(texture.size_vec2(), rect.size()),
             egui::Color32::WHITE,
         );
     }
@@ -4402,12 +4663,7 @@ fn paint_background(ctx: &egui::Context, texture: Option<&egui::TextureHandle>) 
     painter.rect_filled(
         rect,
         0.0,
-        egui::Color32::from_rgba_unmultiplied(8, 11, 14, 176),
-    );
-    painter.rect_filled(
-        rect,
-        0.0,
-        egui::Color32::from_rgba_unmultiplied(18, 22, 27, 88),
+        egui::Color32::from_rgba_unmultiplied(5, 16, 32, 76),
     );
 }
 
@@ -4476,10 +4732,10 @@ fn build_brand_title_job(ui: &egui::Ui, title: &str, time: f32) -> egui::text::L
 
 fn brand_title_color(time: f32, phase_offset: f32) -> egui::Color32 {
     let palette = [
-        egui::Color32::from_rgb(89, 168, 255),
-        egui::Color32::from_rgb(155, 102, 255),
-        egui::Color32::from_rgb(255, 94, 107),
-        egui::Color32::from_rgb(255, 213, 79),
+        egui::Color32::from_rgb(89, 198, 238),
+        egui::Color32::from_rgb(186, 219, 237),
+        egui::Color32::from_rgb(232, 241, 250),
+        egui::Color32::from_rgb(124, 214, 245),
     ];
     let palette_len = palette.len() as f32;
     let progress = (time * HEADER_BRAND_ANIMATION_SPEED + phase_offset).rem_euclid(palette_len);
@@ -4538,7 +4794,7 @@ fn themed_button(
 
 fn primary_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let colors = theme::palette();
-    themed_button(ui, label, colors.accent_soft, colors.accent, colors.accent)
+    themed_button(ui, label, colors.accent, colors.silver, colors.card)
 }
 
 fn secondary_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
@@ -4560,8 +4816,8 @@ fn danger_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
 fn wide_primary_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
     let colors = theme::palette();
     ui.add_sized(
-        [ui.available_width(), 34.0],
-        themed_button_widget(label, colors.accent_soft, colors.accent, colors.accent),
+        [ui.available_width(), 42.0],
+        themed_button_widget(label, colors.accent, colors.silver, colors.card),
     )
 }
 
@@ -4597,25 +4853,26 @@ fn status_banner(ui: &mut egui::Ui, status: &StatusBanner) -> bool {
         .rounding(10.0)
         .inner_margin(egui::Margin::symmetric(10.0, 7.0))
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(&status.message).size(12.0).color(text));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                egui::RichText::new("Fermer")
-                                    .size(11.0)
-                                    .color(colors.text_primary),
-                            )
-                            .fill(fill)
-                            .stroke(egui::Stroke::new(1.0, stroke))
-                            .rounding(8.0),
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                if ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new("Fermer")
+                                .size(11.0)
+                                .color(colors.text_primary),
                         )
-                        .clicked()
-                    {
-                        close_clicked = true;
-                    }
-                });
+                        .fill(fill)
+                        .stroke(egui::Stroke::new(1.0, stroke))
+                        .rounding(8.0),
+                    )
+                    .clicked()
+                {
+                    close_clicked = true;
+                }
+                ui.add(
+                    egui::Label::new(egui::RichText::new(&status.message).size(12.0).color(text))
+                        .wrap(),
+                );
             });
         });
 
@@ -4623,7 +4880,11 @@ fn status_banner(ui: &mut egui::Ui, status: &StatusBanner) -> bool {
 }
 
 fn list_toolbar(ui: &mut egui::Ui, search: &mut String, hint: &str) {
-    let clear_width = if search.is_empty() { 0.0 } else { 82.0 };
+    let clear_width = if search.is_empty() {
+        0.0
+    } else {
+        86.0 + ui.spacing().item_spacing.x
+    };
     let input_width = (ui.available_width() - clear_width).max(140.0);
 
     ui.horizontal(|ui| {
@@ -4635,7 +4896,16 @@ fn list_toolbar(ui: &mut egui::Ui, search: &mut String, hint: &str) {
         );
 
         if !search.is_empty() {
-            let response = secondary_button(ui, "Effacer");
+            let colors = theme::palette();
+            let response = ui.add_sized(
+                [86.0, 30.0],
+                themed_button_widget(
+                    "Effacer",
+                    colors.surface_alt,
+                    colors.border,
+                    colors.text_primary,
+                ),
+            );
             if response.clicked() {
                 search.clear();
             }
@@ -4648,7 +4918,7 @@ fn rank_badge(ui: &mut egui::Ui, rank: usize) {
 
     egui::Frame::none()
         .fill(colors.accent_soft)
-        .stroke(egui::Stroke::new(1.0, colors.accent))
+        .stroke(egui::Stroke::new(1.0, colors.gold))
         .rounding(999.0)
         .inner_margin(egui::Margin::symmetric(8.0, 5.0))
         .show(ui, |ui| {
@@ -4656,7 +4926,7 @@ fn rank_badge(ui: &mut egui::Ui, rank: usize) {
                 egui::RichText::new(format!("#{rank}"))
                     .size(11.0)
                     .strong()
-                    .color(colors.accent),
+                    .color(colors.gold),
             );
         });
 }
@@ -4678,10 +4948,26 @@ fn render_ranked_card_header(
                 .strong()
                 .color(value_color),
         )
-        .wrap(true)
+        .wrap()
     };
 
-    if ui.available_width() < CARD_HEADER_STACK_BREAKPOINT {
+    let title_width = ui
+        .painter()
+        .layout_no_wrap(
+            title.to_owned(),
+            egui::FontId::proportional(16.0),
+            colors.text_primary,
+        )
+        .size()
+        .x;
+    let value_width = ui
+        .painter()
+        .layout_no_wrap(value.clone(), egui::FontId::monospace(18.0), value_color)
+        .size()
+        .x;
+    if ui.available_width() < CARD_HEADER_STACK_BREAKPOINT
+        || title_width + value_width + 100.0 > ui.available_width()
+    {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 rank_badge(ui, rank + 1);
@@ -4739,7 +5025,7 @@ fn preview_card_sized(ui: &mut egui::Ui, title: &str, preview: &PreviewBlock, wi
         egui::Frame::none()
             .fill(fill)
             .stroke(egui::Stroke::new(1.0, stroke))
-            .rounding(12.0)
+            .rounding(8.0)
             .inner_margin(egui::Margin::symmetric(12.0, 10.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -4759,7 +5045,7 @@ fn preview_card_sized(ui: &mut egui::Ui, title: &str, preview: &PreviewBlock, wi
                             .strong()
                             .color(text),
                     )
-                    .wrap(true),
+                    .wrap(),
                 );
                 ui.add_space(4.0);
                 ui.add(
@@ -4768,7 +5054,7 @@ fn preview_card_sized(ui: &mut egui::Ui, title: &str, preview: &PreviewBlock, wi
                             .size(11.0)
                             .color(colors.text_secondary),
                     )
-                    .wrap(true),
+                    .wrap(),
                 )
                 .on_hover_text(preview.detail.clone());
             });
@@ -4804,14 +5090,40 @@ fn empty_state(ui: &mut egui::Ui, no_data: bool, empty_message: &str, search_mes
     egui::Frame::none()
         .fill(colors.surface_alt)
         .stroke(egui::Stroke::new(1.0, colors.border))
-        .rounding(12.0)
+        .rounding(8.0)
         .inner_margin(egui::Margin::same(14.0))
         .show(ui, |ui| {
-            ui.label(
-                egui::RichText::new(message)
-                    .size(13.0)
-                    .color(colors.text_secondary),
-            );
+            ui.set_min_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                ui.add_space(10.0);
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(46.0, 46.0), egui::Sense::hover());
+                ui.painter().circle_stroke(
+                    rect.center(),
+                    21.0,
+                    egui::Stroke::new(1.0, colors.border_strong),
+                );
+                paint_rune(
+                    ui.painter(),
+                    rect.center(),
+                    14.0,
+                    if no_data {
+                        colors.accent
+                    } else {
+                        colors.silver
+                    },
+                );
+                ui.add_space(8.0);
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(message)
+                            .size(13.0)
+                            .color(colors.text_secondary),
+                    )
+                    .wrap(),
+                );
+                ui.add_space(10.0);
+            });
         });
 }
 
@@ -5053,7 +5365,7 @@ fn render_activity_tooltip_content(
     );
     render_tooltip_field(
         ui,
-        "Kamas gagnes net :",
+        "Kamas gagnés nets :",
         format!("{} kamas", format_kamas(delta_value)),
         profit_color(delta_value),
         true,
@@ -5189,7 +5501,7 @@ fn preview_dungeon(form: &DungeonForm) -> PreviewBlock {
     PreviewBlock {
         value: format!("{} kamas/h", format_kamas(kamas_per_hour)),
         detail: format!(
-            "{} | Net / run : {} kamas | Cout de cle : {} kamas",
+            "{} | Net / run : {} kamas | Coût de cle : {} kamas",
             format_duration_hms(run_time_seconds),
             format_kamas(net_kamas_per_run),
             format_kamas(key_price)
@@ -5258,7 +5570,7 @@ fn preview_duo_trio(form: &DuoTrioForm) -> PreviewBlock {
     PreviewBlock {
         value: format!("{} kamas/h", format_kamas(kamas_per_hour)),
         detail: format!(
-            "{} | Net / run : {} kamas | Cout total : {} kamas | Clefs : {} ({} kamas)",
+            "{} | Net / run : {} kamas | Coût total : {} kamas | Clefs : {} ({} kamas)",
             format_duration_hms(run_time_seconds),
             format_kamas(net_kamas_per_run),
             format_kamas(total_cost),
@@ -5277,7 +5589,7 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
     let Ok(round_time_seconds) = parse_duration_input(&form.round_time) else {
         return PreviewBlock {
             value: "Calcul en attente".to_string(),
-            detail: "Renseignez HH MM SS, les places vendues et le cout des captures.".to_string(),
+            detail: "Renseignez HH MM SS, les places vendues et le coût des captures.".to_string(),
             tone: PreviewTone::Neutral,
         };
     };
@@ -5285,7 +5597,7 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
     let Some(seat_price) = parse_f32(&form.seat_price) else {
         return PreviewBlock {
             value: "Calcul en attente".to_string(),
-            detail: "Renseignez HH MM SS, les places vendues et le cout des captures.".to_string(),
+            detail: "Renseignez HH MM SS, les places vendues et le coût des captures.".to_string(),
             tone: PreviewTone::Neutral,
         };
     };
@@ -5293,7 +5605,7 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
     let Some(seats_sold) = parse_u32(&form.seats_sold) else {
         return PreviewBlock {
             value: "Calcul en attente".to_string(),
-            detail: "Renseignez HH MM SS, les places vendues et le cout des captures.".to_string(),
+            detail: "Renseignez HH MM SS, les places vendues et le coût des captures.".to_string(),
             tone: PreviewTone::Neutral,
         };
     };
@@ -5301,7 +5613,7 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
     let Some(capture_price) = parse_f32(&form.capture_price) else {
         return PreviewBlock {
             value: "Calcul en attente".to_string(),
-            detail: "Renseignez HH MM SS, les places vendues et le cout des captures.".to_string(),
+            detail: "Renseignez HH MM SS, les places vendues et le coût des captures.".to_string(),
             tone: PreviewTone::Neutral,
         };
     };
@@ -5309,7 +5621,7 @@ fn preview_arena(form: &ArenaForm) -> PreviewBlock {
     let Some(captures_count) = parse_u32(&form.captures_count) else {
         return PreviewBlock {
             value: "Calcul en attente".to_string(),
-            detail: "Renseignez HH MM SS, les places vendues et le cout des captures.".to_string(),
+            detail: "Renseignez HH MM SS, les places vendues et le coût des captures.".to_string(),
             tone: PreviewTone::Neutral,
         };
     };
@@ -5380,6 +5692,802 @@ mod tests {
         }
     }
 
+    fn preview_data() -> crate::models::AppData {
+        let name = "Sanctuaire des aventuriers du Monde des Douze — session de groupe et captures";
+        let duration = DurationInput {
+            hours: "01".into(),
+            ..Default::default()
+        };
+        crate::models::AppData {
+            zones: vec![crate::build_zone_entry(&ZoneForm {
+                name: name.into(),
+                character_class: Some(DofusClass::Cra),
+                session_time: duration.clone(),
+                session_total_kamas: "123456789".into(),
+                ..Default::default()
+            })
+            .unwrap()],
+            dungeons: vec![crate::build_dungeon_entry(&DungeonForm {
+                name: name.into(),
+                character_class: Some(DofusClass::Enutrof),
+                run_time: duration.clone(),
+                gross_kamas_per_run: "654321".into(),
+                key_price: "15000".into(),
+                ..Default::default()
+            })
+            .unwrap()],
+            duo_trios: vec![crate::build_duo_trio_entry(&DuoTrioForm {
+                name: name.into(),
+                character_class: Some(DofusClass::Pandawa),
+                run_time: duration.clone(),
+                party_mode: PartyMode::Trio,
+                loot_kamas_per_run: "750000".into(),
+                capture_stone_price: "50000".into(),
+                key_unit_price: "15000".into(),
+                full_soul_sale_price: "300000".into(),
+                ..Default::default()
+            })
+            .unwrap()],
+            arenas: vec![crate::build_arena_entry(&ArenaForm {
+                name: name.into(),
+                character_class: Some(DofusClass::Feca),
+                round_time: duration,
+                seat_price: "10000".into(),
+                seats_sold: "7".into(),
+                capture_price: "12345678".into(),
+                captures_count: "10".into(),
+                ..Default::default()
+            })
+            .unwrap()],
+        }
+    }
+
+    fn frame_input(
+        size: egui::Vec2,
+        time: f64,
+        dpi: f32,
+        events: Vec<egui::Event>,
+    ) -> egui::RawInput {
+        let mut input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .native_pixels_per_point = Some(dpi);
+        input
+    }
+
+    #[test]
+    fn scenery_crop_preserves_aspect_ratio_at_all_window_shapes() {
+        let image = egui::vec2(1536.0, 1024.0);
+        for viewport in [
+            egui::vec2(920.0, 680.0),
+            egui::vec2(1180.0, 820.0),
+            egui::vec2(1920.0, 1080.0),
+            egui::vec2(680.0, 920.0),
+            image,
+        ] {
+            let uv = background_cover_uv(image, viewport);
+            assert!(uv.min.x >= 0.0 && uv.min.y >= 0.0 && uv.max.x <= 1.0 && uv.max.y <= 1.0);
+            assert_eq!(uv.center(), egui::pos2(0.5, 0.5));
+            let sampled_ratio = image.x * uv.width() / (image.y * uv.height());
+            assert!((sampled_ratio - viewport.x / viewport.y).abs() < 0.0001);
+        }
+        assert_eq!(
+            background_cover_uv(egui::Vec2::ZERO, image),
+            egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0))
+        );
+    }
+
+    #[test]
+    fn recent_session_cards_remain_compact_in_tall_viewports() {
+        for size in [egui::vec2(1180.0, 2200.0), egui::vec2(1920.0, 3000.0)] {
+            for name in [
+                "Donjon des Blops".to_owned(),
+                "Une aventure dans le Monde des Douze avec une équipe de voyageurs expérimentés. "
+                    .repeat(4),
+            ] {
+                let ctx = egui::Context::default();
+                theme::apply_theme(&ctx);
+                let app = MyApp {
+                    data: preview_data(),
+                    ..Default::default()
+                };
+                let mut summary = build_report_summary(
+                    &app.data,
+                    app.report_period,
+                    app.report_categories,
+                    local_now(),
+                );
+                summary.recent_sessions.truncate(1);
+                summary.recent_sessions[0].name = name;
+                let mut height = 0.0;
+                let mut used = egui::Rect::NOTHING;
+                let output = ctx.run(frame_input(size, 0.0, 1.0, Vec::new()), |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        let top = ui.cursor().top();
+                        app.render_recent_sessions(ui, &summary);
+                        height = ui.cursor().top() - top;
+                    });
+                    // Je relève la surface avant qu'egui échange les caches des deux frames.
+                    used = ctx.used_rect();
+                });
+                assert!(
+                    height > 0.0 && height < 220.0,
+                    "Carte de session trop haute pour {size:?} : {height}"
+                );
+                assert!(
+                    used.is_finite() && used.right() <= size.x + 1.0,
+                    "Carte de session : écran {size:?}, surface utilisée {used:?}"
+                );
+                let text_bounds = |label: &str| {
+                    output
+                        .shapes
+                        .iter()
+                        .find_map(|clipped| match &clipped.shape {
+                            egui::Shape::Text(text) if text.galley.job.text == label => {
+                                Some(text.galley.rect.translate(text.pos.to_vec2()))
+                            }
+                            _ => None,
+                        })
+                        .unwrap()
+                };
+                let session = &summary.recent_sessions[0];
+                let title = text_bounds(&session.name);
+                let amount =
+                    text_bounds(&format!("{} kamas", format_kamas(session.accounting_value)));
+                assert!(
+                    !title.intersects(amount),
+                    "Le titre et le montant se chevauchent : {title:?} / {amount:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn status_banner_remains_compact_in_tall_viewports() {
+        for size in [egui::vec2(1180.0, 2200.0), egui::vec2(1920.0, 3000.0)] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut height = 0.0;
+            let mut used = egui::Rect::NOTHING;
+            let status = StatusBanner {
+                kind: StatusKind::Success,
+                message: "État local sauvegardé.".to_owned(),
+            };
+            let output = ctx.run(frame_input(size, 0.0, 1.0, Vec::new()), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let top = ui.cursor().top();
+                    assert!(!status_banner(ui, &status));
+                    height = ui.cursor().top() - top;
+                });
+                used = ctx.used_rect();
+            });
+            assert!(
+                height > 0.0 && height < 150.0,
+                "Bannière trop haute pour {size:?} : {height}"
+            );
+            assert!(find_text_center(&output.shapes, "Fermer").is_some());
+            assert!(
+                used.is_finite() && used.right() <= size.x + 1.0,
+                "Bannière : écran {size:?}, surface utilisée {used:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn chart_legend_stays_compact_in_tall_viewports_and_preserves_category_order() {
+        let kinds = [
+            ActivityKind::Zone,
+            ActivityKind::Dungeon,
+            ActivityKind::DuoTrio,
+            ActivityKind::Arena,
+        ];
+        let series: Vec<_> = kinds
+            .into_iter()
+            .map(|kind| CategorySeries {
+                kind,
+                points: Vec::new(),
+                total_in_period: 250_000.0,
+                session_count: 3,
+            })
+            .collect();
+        for size in [
+            egui::vec2(1180.0, 2200.0),
+            egui::vec2(1920.0, 3000.0),
+            egui::vec2(600.0, 2200.0),
+        ] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut legend_height = 0.0;
+            let output = ctx.run(frame_input(size, 0.0, 1.0, Vec::new()), |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let top = ui.cursor().top();
+                    render_chart_series_footer(ui, &series);
+                    legend_height = ui.cursor().top() - top;
+                });
+            });
+            // Je limite la légende à son contenu, même sous un graphique dans une fenêtre très haute.
+            assert!(
+                legend_height > 0.0 && legend_height < 200.0,
+                "Légende trop haute pour {size:?} : {legend_height}"
+            );
+            let centers: Vec<_> = kinds
+                .into_iter()
+                .map(|kind| find_text_center(&output.shapes, kind.label()).unwrap())
+                .collect();
+            for pair in centers.windows(2) {
+                assert!(
+                    pair[1].y > pair[0].y + 1.0
+                        || ((pair[1].y - pair[0].y).abs() <= 1.0 && pair[1].x > pair[0].x)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn metric_badges_share_the_same_vertical_alignment() {
+        for compact in [false, true] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut rects = Vec::new();
+            let _ = ctx.run(
+                frame_input(egui::vec2(920.0, 680.0), 0.0, 1.0, Vec::new()),
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        clamped_wrapped_row(ui, |ui| {
+                            for (label, value) in [
+                                ("Date + heure", "2026-09-12 14:30"),
+                                ("Session", "01:15:00"),
+                                ("Valeur", "265 000 kamas"),
+                            ] {
+                                rects.push(
+                                    measured_metric_badge(ui, label, value.into(), compact).rect,
+                                );
+                            }
+                        });
+                    });
+                },
+            );
+            assert_eq!(rects.len(), 3);
+            for rect in &rects[1..] {
+                assert!((rect.top() - rects[0].top()).abs() < 0.01);
+                assert!((rect.bottom() - rects[0].bottom()).abs() < 0.01);
+            }
+        }
+    }
+
+    #[test]
+    fn logo_preserves_ratio_inside_its_medallion() {
+        for image in [
+            egui::vec2(100.0, 100.0),
+            egui::vec2(1600.0, 900.0),
+            egui::vec2(600.0, 1200.0),
+        ] {
+            let size = contain_image_size(image, egui::Vec2::splat(70.0));
+            assert!(size.max_elem() <= 70.001);
+            assert!((size.x / size.y - image.x / image.y).abs() < 0.0001);
+        }
+        assert_eq!(
+            contain_image_size(egui::Vec2::ZERO, egui::Vec2::splat(70.0)),
+            egui::Vec2::ZERO
+        );
+    }
+
+    #[test]
+    fn form_and_results_fit_the_initial_window_with_an_exact_gap() {
+        assert!(!can_fit_two_columns(
+            1037.0,
+            FORM_PANEL_MIN_WIDTH,
+            LIST_PANEL_MIN_WIDTH
+        ));
+        assert!(can_fit_two_columns(
+            1038.0,
+            FORM_PANEL_MIN_WIDTH,
+            LIST_PANEL_MIN_WIDTH
+        ));
+        for width in [1038.0, 1152.0, 1412.0, 1892.0] {
+            let (left, right) = split_form_list_widths(width);
+            assert!((FORM_PANEL_MIN_WIDTH..=FORM_PANEL_MAX_WIDTH).contains(&left));
+            assert!(right >= LIST_PANEL_MIN_WIDTH);
+            assert!((left + right + SECTION_GAP - width).abs() < 0.01);
+        }
+    }
+
+    #[test]
+    fn all_screens_render_without_horizontal_overflow_at_supported_sizes_and_dpi() {
+        let tabs = [
+            Tab::Bilans,
+            Tab::RechercheActivite,
+            Tab::Zones,
+            Tab::Donjons,
+            Tab::DuoTrio,
+            Tab::PlArene,
+        ];
+        // Je garde ces scénarios entièrement en mémoire pour ne jamais toucher aux sauvegardes.
+        for populated in [false, true] {
+            for dpi in [1.0, 1.25, 1.5] {
+                for size in [
+                    egui::vec2(920.0, 680.0),
+                    egui::vec2(1180.0, 820.0),
+                    egui::vec2(1440.0, 900.0),
+                    egui::vec2(1920.0, 1080.0),
+                ] {
+                    for tab in tabs {
+                        let ctx = egui::Context::default();
+                        theme::apply_theme(&ctx);
+                        let mut app = MyApp {
+                            current_tab: tab,
+                            data: if populated {
+                                preview_data()
+                            } else {
+                                Default::default()
+                            },
+                            ..Default::default()
+                        };
+                        let mut last_output = None;
+                        let mut used = egui::Rect::NOTHING;
+                        for frame in 0..3 {
+                            last_output = Some(ctx.run(
+                                frame_input(size, f64::from(frame) / 60.0, dpi, Vec::new()),
+                                |ctx| {
+                                    app.render(ctx);
+                                    used = ctx.used_rect();
+                                },
+                            ));
+                        }
+                        assert!(used.is_finite());
+                        assert!(used.left() >= -1.0 && used.right() <= size.x + 1.0, "Débordement {tab:?}, taille {size:?}, DPI {dpi}, rempli={populated} : {used:?}");
+                        let output = last_output.unwrap();
+                        assert!(!output.shapes.is_empty());
+                        for primitive in ctx.tessellate(output.shapes, ctx.pixels_per_point()) {
+                            if let egui::epaint::Primitive::Mesh(mesh) = primitive.primitive {
+                                assert!(mesh
+                                    .vertices
+                                    .iter()
+                                    .all(|vertex| vertex.pos.is_finite() && vertex.uv.is_finite()));
+                                assert!(mesh
+                                    .indices
+                                    .iter()
+                                    .all(|index| (*index as usize) < mesh.vertices.len()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tab_buttons_change_the_current_screen_on_click() {
+        for target in [
+            Tab::Bilans,
+            Tab::RechercheActivite,
+            Tab::Zones,
+            Tab::Donjons,
+            Tab::DuoTrio,
+            Tab::PlArene,
+        ] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut current = if target == Tab::Zones {
+                Tab::Bilans
+            } else {
+                Tab::Zones
+            };
+            let mut button_rect = egui::Rect::NOTHING;
+            let _ = ctx.run(
+                frame_input(egui::vec2(600.0, 200.0), 0.0, 1.0, Vec::new()),
+                |ctx| {
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        button_rect =
+                            styled_tab_button(ui, &mut current, target, target.label()).rect;
+                    });
+                },
+            );
+            for (index, pressed) in [true, false].into_iter().enumerate() {
+                let pos = button_rect.center();
+                let events = vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ];
+                let _ = ctx.run(
+                    frame_input(
+                        egui::vec2(600.0, 200.0),
+                        (index + 1) as f64 / 60.0,
+                        1.0,
+                        events,
+                    ),
+                    |ctx| {
+                        egui::CentralPanel::default().show(ctx, |ui| {
+                            styled_tab_button(ui, &mut current, target, target.label());
+                        });
+                    },
+                );
+            }
+            assert_eq!(current, target);
+        }
+    }
+
+    fn find_text_center(shapes: &[egui::epaint::ClippedShape], label: &str) -> Option<egui::Pos2> {
+        fn in_shape(shape: &egui::Shape, label: &str) -> Option<egui::Pos2> {
+            match shape {
+                egui::Shape::Text(text) if text.galley.job.text == label => {
+                    Some(text.pos + text.galley.rect.center().to_vec2())
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().find_map(|shape| in_shape(shape, label)),
+                _ => None,
+            }
+        }
+        shapes
+            .iter()
+            .find_map(|shape| in_shape(&shape.shape, label))
+    }
+
+    fn settled_preview(ctx: &egui::Context, app: &mut MyApp, size: egui::Vec2) -> egui::FullOutput {
+        let mut output = egui::FullOutput::default();
+        let mut used = egui::Rect::NOTHING;
+        for _ in 0..3 {
+            let time = ctx.input(|input| input.time) + 1.0 / 60.0;
+            output = ctx.run(frame_input(size, time, 1.25, Vec::new()), |ctx| {
+                app.render(ctx);
+                used = ctx.used_rect();
+            });
+        }
+        assert!(
+            used.is_finite() && used.right() <= size.x + 1.0,
+            "Débordement {:?} : {used:?}",
+            app.current_tab,
+        );
+        output
+    }
+
+    fn named_save_preview() -> crate::storage::NamedSaveSummary {
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2026-09-12T12:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        crate::storage::NamedSaveSummary {
+            meta: crate::storage::NamedSaveMeta {
+                save_id: "session-en-memoire".into(),
+                display_name: "Donjons et captures de la semaine — équipe du Monde des Douze "
+                    .repeat(3),
+                created_at: timestamp,
+                updated_at: timestamp,
+            },
+            path: "session-en-memoire.json".into(),
+            used_backup: true,
+            data_summary: crate::storage::NamedSaveDataSummary {
+                zones: 10,
+                dungeons: 12,
+                duo_trios: 8,
+                arenas: 4,
+                draft_count: 3,
+            },
+        }
+    }
+
+    #[test]
+    fn named_save_dialogs_fit_supported_windows_with_long_names_and_errors() {
+        // Je fournis les résumés en mémoire sans ouvrir ni modifier le dossier de sauvegarde.
+        for dpi in [1.0, 1.25, 1.5] {
+            for size in [egui::vec2(920.0, 680.0), egui::vec2(1180.0, 820.0)] {
+                for scenario in 0..6 {
+                    let ctx = egui::Context::default();
+                    theme::apply_theme(&ctx);
+                    let summary = named_save_preview();
+                    let mut app = MyApp {
+                        data: preview_data(),
+                        ..Default::default()
+                    };
+                    match scenario {
+                        0 | 1 => {
+                            app.show_named_save_dialog = true;
+                            app.named_save_name_input = summary.meta.display_name.clone();
+                            if scenario == 1 {
+                                app.named_save_error = Some("Ce nom est déjà utilisé. Choisissez un autre nom ou confirmez son remplacement.".into());
+                            }
+                        }
+                        2..=4 => {
+                            app.show_named_load_dialog = true;
+                            if scenario != 2 {
+                                app.named_saves = (0..5)
+                                    .map(|index| {
+                                        let mut entry = summary.clone();
+                                        if index > 0 {
+                                            entry.meta.save_id =
+                                                format!("session-en-memoire-{index}");
+                                        }
+                                        entry
+                                    })
+                                    .collect();
+                            }
+                            if scenario == 4 {
+                                app.named_save_rename = Some(crate::NamedSaveRenameState {
+                                    save_id: summary.meta.save_id.clone(),
+                                    value: summary.meta.display_name.clone(),
+                                    error: Some(
+                                        "Ce nom est déjà utilisé par une autre sauvegarde.".into(),
+                                    ),
+                                });
+                            }
+                        }
+                        _ => {
+                            app.show_named_save_confirm = true;
+                            app.pending_named_save_confirm_action =
+                                Some(crate::NamedSaveConfirmAction::Delete {
+                                    save_id: summary.meta.save_id.clone(),
+                                    display_name: summary.meta.display_name.clone(),
+                                });
+                        }
+                    }
+                    let mut output = egui::FullOutput::default();
+                    let mut used = egui::Rect::NOTHING;
+                    for frame in 0..4 {
+                        output = ctx.run(
+                            frame_input(size, f64::from(frame) / 60.0, dpi, Vec::new()),
+                            |ctx| {
+                                app.render(ctx);
+                                used = ctx.used_rect();
+                            },
+                        );
+                    }
+                    assert!(used.is_finite());
+                    assert!(
+                        used.left() >= -1.0
+                            && used.right() <= size.x + 1.0
+                            && used.top() >= -1.0
+                            && used.bottom() <= size.y + 1.0,
+                        "Dialogue {scenario}, taille {size:?}, DPI {dpi} : {used:?}"
+                    );
+                    let expected_label = match scenario {
+                        0 | 1 => "Nom de la sauvegarde",
+                        2 => "Aucune sauvegarde nommée disponible pour le moment.",
+                        3 => "Renommer",
+                        4 => "Enregistrer",
+                        _ => "Annuler",
+                    };
+                    assert!(
+                        find_text_center(&output.shapes, expected_label).is_some(),
+                        "Dialogue {scenario} : action absente {expected_label}"
+                    );
+                    if (2..=4).contains(&scenario) {
+                        let close = find_text_center(&output.shapes, "Fermer").expect(
+                            "Le bouton de fermeture de la bibliothèque doit rester visible",
+                        );
+                        assert!(close.y > 0.0 && close.y < size.y);
+                    }
+                    assert_eq!(app.data.zones.len(), 1);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn named_save_dialogs_close_on_escape_without_changing_current_data() {
+        for scenario in 0..3 {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut app = MyApp {
+                data: preview_data(),
+                show_named_save_dialog: scenario == 0,
+                show_named_load_dialog: scenario == 1,
+                show_named_save_confirm: scenario == 2,
+                ..Default::default()
+            };
+            if scenario == 2 {
+                app.pending_named_save_confirm_action =
+                    Some(crate::NamedSaveConfirmAction::Delete {
+                        save_id: "session-en-memoire".into(),
+                        display_name: "Ma session".into(),
+                    });
+            }
+            let _ = ctx.run(
+                frame_input(
+                    egui::vec2(920.0, 680.0),
+                    0.0,
+                    1.25,
+                    vec![egui::Event::Key {
+                        key: egui::Key::Escape,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    }],
+                ),
+                |ctx| app.render(ctx),
+            );
+            assert!(!app.show_named_save_dialog);
+            assert!(!app.show_named_load_dialog);
+            assert!(!app.show_named_save_confirm);
+            assert!(app.pending_named_save_confirm_action.is_none());
+            assert_eq!(app.data.zones.len(), 1);
+        }
+    }
+
+    #[test]
+    fn named_save_rename_button_targets_the_selected_save() {
+        let ctx = egui::Context::default();
+        theme::apply_theme(&ctx);
+        let summary = named_save_preview();
+        let mut app = MyApp {
+            data: preview_data(),
+            show_named_load_dialog: true,
+            named_saves: vec![summary.clone()],
+            ..Default::default()
+        };
+        let size = egui::vec2(920.0, 680.0);
+        let output = settled_preview(&ctx, &mut app, size);
+        let pos =
+            find_text_center(&output.shapes, "Renommer").expect("Le bouton doit rester accessible");
+        for pressed in [true, false] {
+            let time = ctx.input(|input| input.time) + 1.0 / 60.0;
+            let _ = ctx.run(
+                frame_input(
+                    size,
+                    time,
+                    1.25,
+                    vec![
+                        egui::Event::PointerMoved(pos),
+                        egui::Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: egui::Modifiers::NONE,
+                        },
+                    ],
+                ),
+                |ctx| app.render(ctx),
+            );
+        }
+        let rename = app
+            .named_save_rename
+            .expect("Le renommage doit être ouvert");
+        assert_eq!(rename.save_id, summary.meta.save_id);
+        assert_eq!(rename.value, summary.meta.display_name);
+        assert_eq!(app.data.zones.len(), 1);
+    }
+
+    #[test]
+    fn real_assets_inline_edits_and_options_menu_fit_compact_windows() {
+        for size in [egui::vec2(920.0, 680.0), egui::vec2(1180.0, 820.0)] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut app = MyApp {
+                data: preview_data(),
+                ..Default::default()
+            };
+            app.load_visual_assets(&ctx);
+            assert!(app.background_texture.is_some());
+            assert!(app.app_icon_texture.is_some());
+            assert_eq!(app.class_textures.len(), 12);
+
+            app.start_zone_edit(0);
+            app.start_dungeon_edit(0);
+            app.start_duo_trio_edit(0);
+            app.start_arena_edit(0);
+            for tab in [Tab::Zones, Tab::Donjons, Tab::DuoTrio, Tab::PlArene] {
+                app.current_tab = tab;
+                settled_preview(&ctx, &mut app, size);
+            }
+
+            app.status = Some(StatusBanner { kind: StatusKind::Info, message: "Sauvegarde de secours restaurée depuis le dossier des sessions de votre personnage. ".repeat(4) });
+            let output = settled_preview(&ctx, &mut app, size);
+            let pos =
+                find_text_center(&output.shapes, "Options").expect("Le menu doit rester visible");
+            for pressed in [true, false] {
+                let time = ctx.input(|input| input.time) + 1.0 / 60.0;
+                let events = vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: egui::Modifiers::NONE,
+                    },
+                ];
+                let _ = ctx.run(frame_input(size, time, 1.25, events), |ctx| app.render(ctx));
+            }
+            let output = settled_preview(&ctx, &mut app, size);
+            assert!(find_text_center(&output.shapes, "Sauvegarder l'état").is_some());
+            assert_eq!(app.data.zones.len(), 1);
+        }
+    }
+
+    #[test]
+    fn chart_modes_and_empty_search_results_remain_bounded() {
+        for size in [
+            egui::vec2(920.0, 680.0),
+            egui::vec2(1180.0, 820.0),
+            egui::vec2(1920.0, 1080.0),
+        ] {
+            let ctx = egui::Context::default();
+            theme::apply_theme(&ctx);
+            let mut app = MyApp {
+                data: preview_data(),
+                current_tab: Tab::Bilans,
+                ..Default::default()
+            };
+            for bar_mode in [false, true] {
+                app.report_bar_mode = bar_mode;
+                settled_preview(&ctx, &mut app, size);
+            }
+            app.current_tab = Tab::Zones;
+            app.zone_search = "Une activité absente du carnet".into();
+            let output = settled_preview(&ctx, &mut app, size);
+            assert!(!output.shapes.is_empty());
+            assert_eq!(app.data.zones.len(), 1);
+        }
+    }
+
+    #[test]
+    fn styled_field_keeps_keyboard_input_and_focus() {
+        let ctx = egui::Context::default();
+        theme::apply_theme(&ctx);
+        let mut value = String::new();
+        let mut field_id = egui::Id::NULL;
+        let _ = ctx.run(
+            frame_input(egui::vec2(500.0, 200.0), 0.0, 1.0, Vec::new()),
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    field_id = form_field_row(ui, "Nom", &mut value, "", "Votre activité").id;
+                });
+            },
+        );
+        ctx.memory_mut(|memory| memory.request_focus(field_id));
+        let mut changed = false;
+        let _ = ctx.run(
+            frame_input(
+                egui::vec2(500.0, 200.0),
+                0.1,
+                1.0,
+                vec![egui::Event::Text("Donjon des Blops".into())],
+            ),
+            |ctx| {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let response = form_field_row(ui, "Nom", &mut value, "", "Votre activité");
+                    changed = response.changed();
+                    assert!(response.has_focus());
+                });
+            },
+        );
+        assert!(changed);
+        assert_eq!(value, "Donjon des Blops");
+    }
+
+    #[test]
+    fn escape_closes_confirmation_without_changing_data() {
+        let ctx = egui::Context::default();
+        theme::apply_theme(&ctx);
+        let mut app = MyApp {
+            data: preview_data(),
+            show_clear_state_confirm: true,
+            ..Default::default()
+        };
+        let events = vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }];
+        let _ = ctx.run(
+            frame_input(egui::vec2(1180.0, 820.0), 0.0, 1.0, events),
+            |ctx| app.render(ctx),
+        );
+        assert!(!app.show_clear_state_confirm);
+        assert_eq!(app.data.zones.len(), 1);
+    }
+
     #[test]
     fn summarize_values_returns_best_average_and_count() {
         let summary = summarize_values([120_000.0, 240_000.0, 360_000.0].into_iter());
@@ -5443,7 +6551,7 @@ mod tests {
     fn optional_duration_input_rejects_touched_zero_filter() {
         assert_eq!(
             optional_duration_input_seconds(&DurationInput::default(), true),
-            Err("La duree doit etre superieure a 00:00:00.".to_string())
+            Err("La durée doit être supérieure à 00:00:00.".to_string())
         );
     }
 
@@ -5459,7 +6567,7 @@ mod tests {
         assert_eq!(app.activity_search_available_time_seconds(), None);
         assert_eq!(
             app.activity_search_time_error,
-            Some("La duree doit etre superieure a 00:00:00.".to_string())
+            Some("La durée doit être supérieure à 00:00:00.".to_string())
         );
 
         app.activity_search_time = DurationInput {

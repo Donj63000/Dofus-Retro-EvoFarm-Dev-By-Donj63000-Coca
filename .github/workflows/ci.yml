@@ -1,51 +1,54 @@
-name: ci
+name: Windows CI
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   windows:
-    runs-on: windows-latest
-
+    runs-on: windows-2022
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
+          toolchain: "1.93.0"
           components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Format
-        run: cargo fmt --all --check
-
-      - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
-
-      - name: Tests
-        run: cargo test --locked
-
-      - name: Build release
-        run: cargo build --release --locked
-
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-
-      - name: Dependency audit
-        run: cargo audit
-
-      - name: Compute SHA-256
-        shell: pwsh
-        run: |
-          $exe = "target\release\evofarm.exe"
-          if (-not (Test-Path $exe)) { throw "Executable introuvable: $exe" }
-          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          Set-Content -Path "target\release\evofarm.exe.sha256" -Value "$hash  evofarm.exe" -Encoding Ascii -NoNewline
-
-      - uses: actions/upload-artifact@v4
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          name: evofarm-windows
+          cache-on-failure: false
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked --target x86_64-pc-windows-msvc -- -D warnings
+      - name: Tests Rust
+        run: cargo test --all-targets --locked --target x86_64-pc-windows-msvc
+      - name: Tests du packaging
+        shell: pwsh
+        run: ./scripts/test-packaging.ps1
+      - name: Installer cargo-audit
+        run: cargo install cargo-audit --version 0.22.1 --locked
+      - name: Audit des dependances
+        run: cargo audit
+      - name: Construire la distribution Windows x64
+        shell: pwsh
+        run: ./scripts/build-release.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: EvoFarm-Windows-x64
+          if-no-files-found: error
+          retention-days: 14
           path: |
-            target/release/evofarm.exe
-            target/release/evofarm.exe.sha256
+            EvoFarm.exe
+            EvoFarm-Windows-x64.zip
+            SHA256SUMS

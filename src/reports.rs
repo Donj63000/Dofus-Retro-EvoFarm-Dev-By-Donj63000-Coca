@@ -25,7 +25,7 @@ impl ActivityKind {
             Self::Zone => "Zones",
             Self::Dungeon => "Donjons",
             Self::DuoTrio => "Duo / Trio",
-            Self::Arena => "PL arene",
+            Self::Arena => "PL arène",
         }
     }
 
@@ -34,7 +34,7 @@ impl ActivityKind {
             Self::Zone => "Zone",
             Self::Dungeon => "Donjon",
             Self::DuoTrio => "Duo / Trio",
-            Self::Arena => "PL arene",
+            Self::Arena => "PL arène",
         }
     }
 }
@@ -50,10 +50,10 @@ pub enum ReportPeriod {
 impl ReportPeriod {
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Last24Hours => "24h",
-            Self::Last7Days => "7j",
-            Self::Last30Days => "30j",
-            Self::AllTime => "Depuis le debut",
+            Self::Last24Hours => "24 h",
+            Self::Last7Days => "7 jours",
+            Self::Last30Days => "30 jours",
+            Self::AllTime => "Depuis le début",
         }
     }
 
@@ -123,7 +123,7 @@ impl ReportCategoryFilter {
         match self.selected_kinds().as_slice() {
             [] => "Aucune categorie".to_string(),
             [kind] => kind.label().to_string(),
-            selected if selected.len() == 4 => "Toutes les categories".to_string(),
+            selected if selected.len() == 4 => "Toutes les catégories".to_string(),
             selected => selected
                 .iter()
                 .map(|kind| kind.singular_label())

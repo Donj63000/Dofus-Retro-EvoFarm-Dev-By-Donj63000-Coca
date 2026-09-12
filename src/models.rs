@@ -15,11 +15,11 @@ impl Tab {
     pub fn label(self) -> &'static str {
         match self {
             Self::Bilans => "Bilans",
-            Self::RechercheActivite => "Recherche d'activite",
+            Self::RechercheActivite => "Recherche d’activité",
             Self::Zones => "Zones",
             Self::Donjons => "Donjons",
             Self::DuoTrio => "Duo / Trio",
-            Self::PlArene => "PL arene",
+            Self::PlArene => "PL arène",
         }
     }
 }

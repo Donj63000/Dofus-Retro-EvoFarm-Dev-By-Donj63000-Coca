@@ -57,7 +57,7 @@ pub fn parse_duration_input(input: &DurationInput) -> Result<f32, String> {
     let total_seconds = (hours * 3600 + minutes * 60 + seconds) as f32;
 
     if total_seconds <= 0.0 {
-        return Err("La duree doit etre superieure a 00:00:00.".to_string());
+        return Err("La durée doit être supérieure à 00:00:00.".to_string());
     }
 
     Ok(total_seconds)
@@ -189,7 +189,7 @@ pub fn sanitize_zone_entry(mut entry: ZoneEntry) -> Result<ZoneEntry, String> {
     entry.name = entry.name.trim().to_string();
     validate_non_empty_name(&entry.name, "Le nom de la zone")?;
     entry.session_time_seconds =
-        validate_positive_f32(entry.session_time_seconds, "La duree de session")?;
+        validate_positive_f32(entry.session_time_seconds, "La durée de session")?;
     entry.session_total_kamas =
         validate_non_negative_f32(entry.session_total_kamas, "La valeur totale de session")?;
     entry.kamas_per_hour =
@@ -203,7 +203,7 @@ pub fn sanitize_dungeon_entry(mut entry: DungeonEntry) -> Result<DungeonEntry, S
     entry.run_time_minutes = validate_positive_f32(entry.run_time_minutes, "Le temps du donjon")?;
     entry.gross_kamas_per_run =
         validate_non_negative_f32(entry.gross_kamas_per_run, "Le gain brut moyen")?;
-    entry.key_price = validate_non_negative_f32(entry.key_price, "Le prix de la cle")?;
+    entry.key_price = validate_non_negative_f32(entry.key_price, "Le prix de la clé")?;
     entry.net_kamas_per_run = entry.gross_kamas_per_run - entry.key_price;
     entry.kamas_per_hour = dungeon_kamas_per_hour(entry.net_kamas_per_run, entry.run_time_minutes);
     Ok(entry)
@@ -218,7 +218,7 @@ pub fn sanitize_duo_trio_entry(mut entry: DuoTrioEntry) -> Result<DuoTrioEntry, 
     entry.capture_stone_price =
         validate_non_negative_f32(entry.capture_stone_price, "Le prix de la pierre de capture")?;
     entry.key_unit_price =
-        validate_non_negative_f32(entry.key_unit_price, "Le prix unitaire de la cle")?;
+        validate_non_negative_f32(entry.key_unit_price, "Le prix unitaire de la clé")?;
     entry.full_soul_sale_price = validate_non_negative_f32(
         entry.full_soul_sale_price,
         "Le prix de vente de la capture pleine",
@@ -236,7 +236,7 @@ pub fn sanitize_duo_trio_entry(mut entry: DuoTrioEntry) -> Result<DuoTrioEntry, 
 
 pub fn sanitize_arena_entry(mut entry: ArenaEntry) -> Result<ArenaEntry, String> {
     entry.name = entry.name.trim().to_string();
-    validate_non_empty_name(&entry.name, "Le nom de la session PL arene")?;
+    validate_non_empty_name(&entry.name, "Le nom de la session PL arène")?;
     entry.round_time_minutes =
         validate_positive_f32(entry.round_time_minutes, "Le temps de la ronde")?;
     entry.seat_price = validate_non_negative_f32(entry.seat_price, "Le prix d'une place")?;
@@ -301,7 +301,9 @@ fn validate_positive_f32(value: f32, field_label: &str) -> Result<f32, String> {
     }
 
     if value <= 0.0 {
-        return Err(format!("{field_label} doit etre superieur a 0."));
+        return Err(format!(
+            "{field_label} : une valeur strictement positive est requise."
+        ));
     }
 
     Ok(value)
@@ -313,7 +315,9 @@ fn validate_non_negative_f32(value: f32, field_label: &str) -> Result<f32, Strin
     }
 
     if value < 0.0 {
-        return Err(format!("{field_label} doit etre superieur ou egal a 0."));
+        return Err(format!(
+            "{field_label} : une valeur positive ou nulle est requise."
+        ));
     }
 
     Ok(value)
@@ -367,7 +371,7 @@ mod tests {
         );
         assert_eq!(
             parse_duration_input(&zero_duration),
-            Err("La duree doit etre superieure a 00:00:00.".to_string())
+            Err("La durée doit être supérieure à 00:00:00.".to_string())
         );
     }
 
@@ -389,7 +393,7 @@ mod tests {
     fn parse_non_negative_f32_rejects_negative_values() {
         assert_eq!(
             parse_non_negative_f32("-1", "Prix"),
-            Err("Prix doit etre superieur ou egal a 0.".to_string())
+            Err("Prix : une valeur positive ou nulle est requise.".to_string())
         );
     }
 

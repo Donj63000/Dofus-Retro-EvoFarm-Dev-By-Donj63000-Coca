@@ -1,0 +1,7 @@
+# Je conserve des fins de ligne stables entre Windows et la CI.
+* text=auto eol=lf
+
+*.png binary
+*.pdf binary
+*.exe binary
+*.zip binary

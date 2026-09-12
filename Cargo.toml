@@ -1,18 +1,19 @@
 [package]
 name = "evofarm"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 build = "build.rs"
 
 [package.metadata.winres]
 ProductName = "EvoFarm"
-FileDescription = "EvoFarm"
+FileDescription = "EvoFarm — Compagnon de farm pour Dofus Retro"
 OriginalFilename = "EvoFarm.exe"
+InternalName = "EvoFarm"
 
 [dependencies]
-eframe = "0.27"
-egui = "0.27"
-egui_plot = "0.27"
+eframe = "0.28.1"
+egui = "0.28.1"
+egui_plot = "0.28.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
@@ -22,6 +23,12 @@ rfd = "0.14"
 
 [build-dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "ico"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+winit = { version = "=0.29.15", default-features = false }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

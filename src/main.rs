@@ -2,14 +2,17 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod calculations;
+mod icon_asset;
 mod models;
 mod reports;
 mod storage;
 mod theme;
 mod ui;
 
+#[cfg(all(test, target_os = "windows"))]
+mod visual_qa;
+
 use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
-use image::imageops::FilterType;
 use models::{
     AppData, ArenaEntry, ArenaForm, DofusClass, DraftState, DungeonEntry, DungeonForm,
     DuoTrioEntry, DuoTrioForm, DurationInput, PersistedInlineEdit, PersistedState, Tab, ZoneEntry,
@@ -20,7 +23,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub const APP_NAME: &str = "EvoFarm";
-const APP_ICON_BYTES: &[u8] = include_bytes!("../icone/icone.png");
+const APP_ICON_BYTES: &[u8] = include_bytes!("../logo.png");
+const APP_BACKGROUND_BYTES: &[u8] = include_bytes!("../fond.png");
 const APP_ICON_SIZE: u32 = 256;
 const CLASS_CRA_BYTES: &[u8] = include_bytes!("../classes/cra.png");
 const CLASS_ECAFLIP_BYTES: &[u8] = include_bytes!("../classes/ecaflip.png");
@@ -57,7 +61,7 @@ fn main() -> Result<(), eframe::Error> {
             theme::apply_theme(&cc.egui_ctx);
             let mut app = MyApp::load();
             app.load_visual_assets(&cc.egui_ctx);
-            Box::new(app)
+            Ok(Box::new(app))
         }),
     )
 }
@@ -318,14 +322,14 @@ impl MyApp {
         match self.pending_load_action.as_ref()? {
             LoadAction::ReloadLocal => Some((
                 "Recharger la sauvegarde locale".to_string(),
-                "Cette action remplace l'etat actuellement affiche (donnees et brouillons) par la derniere sauvegarde locale disponible."
+                "Cette action remplace l'état actuellement affiché (données et brouillons) par la dernière sauvegarde locale disponible."
                     .to_string(),
                 "Charger".to_string(),
             )),
             LoadAction::ImportExternal(path) => Some((
                 "Importer un fichier JSON".to_string(),
                 format!(
-                    "Cette action remplace l'etat actuellement affiche (donnees et brouillons) avec le contenu de {} puis met a jour la sauvegarde locale de l'application.",
+                    "Cette action remplace l'état actuellement affiché (données et brouillons) avec le contenu de {} puis met à jour la sauvegarde locale de l'application.",
                     path.display()
                 ),
                 "Importer".to_string(),
@@ -407,7 +411,8 @@ impl MyApp {
         let display_name = match normalized_named_save_input(&self.named_save_name_input) {
             Some(display_name) => display_name,
             None => {
-                self.named_save_error = Some("Le nom de la sauvegarde est obligatoire.".to_string());
+                self.named_save_error =
+                    Some("Le nom de la sauvegarde est obligatoire.".to_string());
                 return;
             }
         };
@@ -416,11 +421,10 @@ impl MyApp {
 
         match storage::find_named_save_by_name_in_dir(&display_name, save_directory) {
             Ok(Some(existing)) => {
-                self.pending_named_save_confirm_action =
-                    Some(NamedSaveConfirmAction::Overwrite {
-                        save_id: existing.meta.save_id,
-                        display_name: existing.meta.display_name,
-                    });
+                self.pending_named_save_confirm_action = Some(NamedSaveConfirmAction::Overwrite {
+                    save_id: existing.meta.save_id,
+                    display_name: existing.meta.display_name,
+                });
                 self.show_named_save_confirm = true;
             }
             Ok(None) => self.save_named_state_to_dir(save_directory, None),
@@ -604,7 +608,7 @@ impl MyApp {
                 self.duo_trio_form = DuoTrioForm::default();
                 self.duo_trio_form_error = None;
                 self.clear_duo_trio_transient_state();
-                self.persist_with_status("Run duo/trio ajoute.");
+                self.persist_with_status("Run duo/trio ajouté.");
             }
             Err(error) => self.duo_trio_form_error = Some(error),
         }
@@ -729,7 +733,7 @@ impl MyApp {
                     run.kamas_per_hour
                 });
                 self.clear_duo_trio_transient_state();
-                self.persist_with_status("Run duo/trio mis a jour.");
+                self.persist_with_status("Run duo/trio mis à jour.");
             }
             Err(error) => {
                 if let Some(edit) = self.duo_trio_edit.as_mut() {
@@ -799,7 +803,7 @@ impl MyApp {
         if index < self.data.duo_trios.len() {
             self.data.duo_trios.remove(index);
             self.clear_duo_trio_transient_state();
-            self.persist_with_status("Run duo/trio supprime.");
+            self.persist_with_status("Run duo/trio supprimé.");
         }
     }
 
@@ -817,7 +821,7 @@ impl MyApp {
         self.show_delete_local_save_confirm = false;
         self.set_status(
             StatusKind::Info,
-            "Etat courant efface. La sauvegarde locale n'a pas ete modifiee.",
+            "État courant effacé. La sauvegarde locale n'a pas été modifiée.",
         );
     }
 
@@ -828,9 +832,9 @@ impl MyApp {
         match storage::delete_state() {
             Ok(()) if had_local_state => self.set_status(
                 StatusKind::Success,
-                "Sauvegarde locale supprimee. Le fichier principal et sa sauvegarde de secours ont ete retires lorsqu'ils existaient.",
+                "Sauvegardes locales supprimées. Les fichiers principaux et de secours des versions reconnues ont été retirés lorsqu'ils existaient.",
             ),
-            Ok(()) => self.set_status(StatusKind::Info, "Aucune sauvegarde locale a supprimer."),
+            Ok(()) => self.set_status(StatusKind::Info, "Aucune sauvegarde locale à supprimer."),
             Err(error) => self.set_status(
                 StatusKind::Error,
                 format!("Impossible de supprimer la sauvegarde locale : {error}"),
@@ -995,7 +999,7 @@ impl MyApp {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     fn reload_local_data_from_path(&mut self, path: &Path) {
         match storage::load_state_from_path(path) {
             Ok(result) => self.apply_reload_state_result(result),
@@ -1113,7 +1117,9 @@ impl MyApp {
                 };
 
                 if result.backup_path.is_some() {
-                    message.push_str(" Une sauvegarde de secours de la version precedente a ete creee.");
+                    message.push_str(
+                        " Une sauvegarde de secours de la version precedente a ete creee.",
+                    );
                 }
 
                 self.set_status(StatusKind::Success, message);
@@ -1336,8 +1342,7 @@ impl eframe::App for MyApp {
 }
 
 fn load_background_texture(ctx: &egui::Context) -> Result<TextureHandle, String> {
-    let bytes = include_bytes!("../fond/img.png");
-    load_texture_from_bytes(ctx, "app-background", bytes)
+    load_texture_from_bytes(ctx, "app-background", APP_BACKGROUND_BYTES)
         .map_err(|error| format!("Image de fond invalide: {error}"))
 }
 
@@ -1347,18 +1352,8 @@ fn load_app_icon_texture(ctx: &egui::Context) -> Result<TextureHandle, String> {
 }
 
 fn load_app_icon_data() -> Result<egui::IconData, String> {
-    let image = image::load_from_memory(APP_ICON_BYTES)
-        .map_err(|error| error.to_string())?
-        .to_rgba8();
-    let resized = image::DynamicImage::ImageRgba8(image)
-        .resize(APP_ICON_SIZE, APP_ICON_SIZE, FilterType::Lanczos3)
-        .to_rgba8();
-
-    let mut canvas =
-        image::RgbaImage::from_pixel(APP_ICON_SIZE, APP_ICON_SIZE, image::Rgba([0, 0, 0, 0]));
-    let offset_x = i64::from((APP_ICON_SIZE - resized.width()) / 2);
-    let offset_y = i64::from((APP_ICON_SIZE - resized.height()) / 2);
-    image::imageops::overlay(&mut canvas, &resized, offset_x, offset_y);
+    // Je conserve le même cadrage transparent pour la fenêtre et le binaire Windows.
+    let canvas = icon_asset::square_icon(APP_ICON_BYTES, APP_ICON_SIZE)?;
 
     Ok(egui::IconData {
         rgba: canvas.into_raw(),
@@ -1441,7 +1436,7 @@ fn build_dungeon_entry(form: &DungeonForm) -> Result<DungeonEntry, String> {
         .map_err(|error| format!("Temps moyen du donjon invalide. {error}"))?;
     let gross_kamas_per_run =
         calculations::parse_non_negative_f32(&form.gross_kamas_per_run, "Gain brut moyen")?;
-    let key_price = calculations::parse_non_negative_f32(&form.key_price, "Prix de la cle")?;
+    let key_price = calculations::parse_non_negative_f32(&form.key_price, "Prix de la clé")?;
 
     calculations::sanitize_dungeon_entry(DungeonEntry {
         name: form.name.trim().to_string(),
@@ -1466,7 +1461,7 @@ fn build_duo_trio_entry(form: &DuoTrioForm) -> Result<DuoTrioEntry, String> {
         "Prix de la pierre de capture",
     )?;
     let key_unit_price =
-        calculations::parse_non_negative_f32(&form.key_unit_price, "Prix unitaire de la cle")?;
+        calculations::parse_non_negative_f32(&form.key_unit_price, "Prix unitaire de la clé")?;
     let full_soul_sale_price = calculations::parse_non_negative_f32(
         &form.full_soul_sale_price,
         "Prix de vente de la capture pleine",
@@ -1606,6 +1601,51 @@ mod tests {
             minutes: minutes.to_string(),
             seconds: seconds.to_string(),
         }
+    }
+
+    #[test]
+    fn embedded_visual_assets_load_once_and_cover_every_class() {
+        let ctx = egui::Context::default();
+        let mut app = MyApp::default();
+        app.load_visual_assets(&ctx);
+
+        let logo = app.app_icon_texture.as_ref().expect("Logo intégré valide");
+        let background = app
+            .background_texture
+            .as_ref()
+            .expect("Fond intégré valide");
+        assert!(logo.size()[0] > 0 && logo.size()[1] > 0);
+        assert!(background.size()[0] > background.size()[1]);
+        assert_eq!(app.class_textures.len(), DofusClass::all().len());
+        let logo_id = logo.id();
+        let background_id = background.id();
+        let class_ids = DofusClass::all().map(|class| app.class_textures[&class].id());
+
+        // Je réutilise les textures déjà chargées au lieu de les recréer à chaque rendu.
+        app.load_visual_assets(&ctx);
+        assert_eq!(app.app_icon_texture.as_ref().unwrap().id(), logo_id);
+        assert_eq!(app.background_texture.as_ref().unwrap().id(), background_id);
+        for (class, id) in DofusClass::all().into_iter().zip(class_ids) {
+            assert_eq!(app.class_textures[&class].id(), id);
+        }
+    }
+
+    #[test]
+    fn window_icon_uses_provided_logo_with_transparent_edges() {
+        let icon = load_app_icon_data().expect("Icône de fenêtre valide");
+        assert_eq!((icon.width, icon.height), (APP_ICON_SIZE, APP_ICON_SIZE));
+        assert_eq!(
+            icon.rgba.len(),
+            (APP_ICON_SIZE * APP_ICON_SIZE * 4) as usize
+        );
+        assert!(icon.rgba.chunks_exact(4).any(|pixel| pixel[3] == 0));
+        assert!(icon.rgba.chunks_exact(4).any(|pixel| pixel[3] == 255));
+    }
+
+    #[test]
+    fn invalid_texture_returns_an_error_without_allocating_a_visual() {
+        let ctx = egui::Context::default();
+        assert!(load_texture_from_bytes(&ctx, "invalid-image", b"invalid PNG").is_err());
     }
 
     fn sample_loaded_data() -> AppData {
@@ -1945,7 +1985,8 @@ mod tests {
             },
             ..PersistedState::default()
         };
-        let saved = storage::save_named_state_in_dir("Route load", &state, None, &directory).unwrap();
+        let saved =
+            storage::save_named_state_in_dir("Route load", &state, None, &directory).unwrap();
         let mut app = MyApp {
             current_tab: Tab::Bilans,
             ..Default::default()
@@ -2166,12 +2207,13 @@ mod tests {
             ..Default::default()
         };
 
-        app.load_from_action(LoadAction::ImportExternal(PathBuf::from(
-            "C:\\missing\\evofarm.json",
-        )));
+        let source_path = temp_state_path("missing-import-source");
+        let target_path = temp_state_path("missing-import-destination");
+        app.import_from_path_to_save_path(&source_path, &target_path);
 
         assert_eq!(app.data.zones.len(), 1);
         assert_eq!(app.data.zones[0].name, "Chargée");
+        assert!(!target_path.exists());
         assert!(matches!(
             app.status.as_ref().map(|status| status.kind),
             Some(StatusKind::Error)
