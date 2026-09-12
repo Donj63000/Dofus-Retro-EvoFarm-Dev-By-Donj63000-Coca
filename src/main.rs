@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 pub const APP_NAME: &str = "EvoFarm";
+const APP_ID: &str = "fr.donj63000.evofarm";
 const APP_ICON_BYTES: &[u8] = include_bytes!("../logo.png");
 const APP_BACKGROUND_BYTES: &[u8] = include_bytes!("../fond.png");
 const APP_ICON_SIZE: u32 = 256;
@@ -39,18 +40,24 @@ const CLASS_SADIDA_BYTES: &[u8] = include_bytes!("../classes/sadida.png");
 const CLASS_SRAM_BYTES: &[u8] = include_bytes!("../classes/sram.png");
 const CLASS_XELOR_BYTES: &[u8] = include_bytes!("../classes/xelor.png");
 
-fn main() -> Result<(), eframe::Error> {
+fn app_viewport() -> egui::ViewportBuilder {
     let mut viewport = eframe::egui::ViewportBuilder::default()
         .with_inner_size([1180.0, 820.0])
         .with_min_inner_size([920.0, 680.0])
-        .with_title(APP_NAME);
+        .with_title(APP_NAME)
+        // Je relie la fenêtre au lanceur Linux et au bundle macOS avec le même identifiant.
+        .with_app_id(APP_ID);
 
     if let Ok(icon) = load_app_icon_data() {
         viewport = viewport.with_icon(icon);
     }
 
+    viewport
+}
+
+fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport,
+        viewport: app_viewport(),
         ..Default::default()
     };
 
@@ -1640,6 +1647,15 @@ mod tests {
         );
         assert!(icon.rgba.chunks_exact(4).any(|pixel| pixel[3] == 0));
         assert!(icon.rgba.chunks_exact(4).any(|pixel| pixel[3] == 255));
+    }
+
+    #[test]
+    fn application_window_matches_desktop_identity_and_keeps_its_icon() {
+        let viewport = app_viewport();
+        assert_eq!(viewport.app_id.as_deref(), Some("fr.donj63000.evofarm"));
+        assert_eq!(viewport.title.as_deref(), Some(APP_NAME));
+        assert!(viewport.icon.is_some());
+        assert_eq!(viewport.min_inner_size, Some(egui::vec2(920.0, 680.0)));
     }
 
     #[test]

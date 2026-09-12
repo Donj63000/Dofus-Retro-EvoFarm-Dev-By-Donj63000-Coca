@@ -6,9 +6,11 @@
 <p align="center"><strong>Dev By Donj63000(Coca)</strong><br>Votre compagnon de farm pour Dofus Retro.</p>
 
 <p align="center">
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe"><strong>Télécharger pour Windows x64</strong></a>
+  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe"><strong>Windows</strong></a>
   ·
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Windows-x64.zip">Archive portable ZIP</a>
+  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-macOS-universal.zip"><strong>macOS</strong></a>
+  ·
+  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Linux-x64.tar.gz"><strong>Linux</strong></a>
   ·
   <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases">Toutes les versions</a>
 </p>
@@ -21,21 +23,55 @@ Son interface bleu nuit, cyan et argent réunit les portraits des douze classes,
 
 *Aperçu de l’application avec des données de démonstration.*
 
-## Commencer en quelques instants
+## Télécharger et commencer
 
-1. Téléchargez **EvoFarm.exe** ci-dessus, ou extrayez l'archive ZIP.
-2. Placez le programme dans le dossier de votre choix et lancez-le.
-3. Sélectionnez une activité, renseignez votre session et consultez vos bilans.
+| Système | Téléchargement | Démarrage |
+| --- | --- | --- |
+| **Windows x64** | [EvoFarm.exe](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe) ou [ZIP portable](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Windows-x64.zip) | Lancez `EvoFarm.exe`. |
+| **macOS Intel et Apple Silicon** | [ZIP universel](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-macOS-universal.zip) | Extrayez le ZIP, placez `EvoFarm.app` dans Applications et ouvrez-la. |
+| **Linux x64** | [Archive TAR.GZ](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Linux-x64.tar.gz) | Extrayez l'archive puis lancez `./EvoFarm/evofarm`. |
 
-**Windows 64 bits.** Aucun installateur, compte ou abonnement n'est requis. L'application fonctionne localement ; elle n'installe aucun service et ne synchronise pas vos données sur Internet. Un raccourci vers `EvoFarm.exe` permet de l'épingler au menu Démarrer ou à la barre des tâches.
+Aucun compte ou abonnement n'est requis. Sélectionnez une activité, renseignez votre session et consultez vos bilans. Le programme fonctionne localement, sans service ni synchronisation cloud.
 
-Chaque release fournit un fichier [SHA256SUMS](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/SHA256SUMS). Pour comparer l'empreinte du téléchargement :
+### Windows
+
+Le programme est portable et intègre son runtime C. Un raccourci vers `EvoFarm.exe` permet de l'épingler au menu Démarrer ou à la barre des tâches, avec le logo de l'application. Les distributions GitHub ne disposent pas d'une signature Authenticode.
+
+### macOS
+
+Le même fichier `EvoFarm.app` contient les versions **Intel x64 et Apple Silicon ARM64**. Le minimum de déploiement est **macOS 11.0** ; les contrôles natifs de la CI sont exécutés sur macOS 15 pour les deux architectures.
+
+Le bundle possède une signature **ad hoc**, sans certificat Developer ID ni notarisation Apple. Si macOS bloque la première ouverture, après avoir essayé de lancer l'app, accédez à **Réglages Système → Confidentialité et sécurité → Ouvrir quand même**, puis confirmez avec **Ouvrir**. Ce parcours est décrit dans l'[assistance Apple](https://support.apple.com/fr-fr/102445).
+
+### Linux
+
+La distribution est construite sur **Ubuntu 22.04 x64**, avec une base **glibc 2.35**. Elle vise les distributions compatibles avec cette base ou une version ultérieure, disposant d'un bureau X11 ou Wayland et d'OpenGL. Les dialogues d'import utilisent XDG Desktop Portal avec un backend GTK, GNOME ou KDE. La présence d'une glibc compatible ne suffit pas si ces bibliothèques de bureau manquent.
+
+Sur Ubuntu 22.04, les composants d'exécution peuvent être installés ainsi :
+
+```bash
+sudo apt install libx11-6 libx11-xcb1 libxcb1 libxkbcommon0 libxkbcommon-x11-0 \
+  libgl1 libegl1 libwayland-client0 xdg-desktop-portal xdg-desktop-portal-gtk
+tar -xzf EvoFarm-Linux-x64.tar.gz
+./EvoFarm/evofarm
+```
+
+L'archive contient également `logo.png`, `fr.donj63000.evofarm.desktop` et **`install-desktop.sh`**. L'exécution facultative de `./EvoFarm/install-desktop.sh` ajoute le raccourci et son icône au menu des applications de votre utilisateur, sans droits administrateur. **Conservez ensuite le dossier extrait au même emplacement** : le raccourci référence son exécutable. Pour déplacer le programme, relancez ce script depuis son nouvel emplacement. Rien n'est installé automatiquement à l'extraction ou au lancement d'EvoFarm.
+
+### Vérifier un téléchargement
+
+Depuis la version 0.3.0, le fichier [SHA256SUMS](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/SHA256SUMS) contient les empreintes des **quatre téléchargements** : l'exécutable Windows et les trois archives. Comparez la valeur calculée avec la ligne correspondant à votre fichier :
 
 ```powershell
 Get-FileHash .\EvoFarm.exe -Algorithm SHA256
 ```
 
-Les distributions GitHub ne disposent pas d'une signature Authenticode.
+```bash
+# Linux
+sha256sum EvoFarm-Linux-x64.tar.gz
+# macOS
+shasum -a 256 EvoFarm-macOS-universal.zip
+```
 
 ## Suivre et comparer vos activités
 
@@ -56,43 +92,85 @@ Les distributions GitHub ne disposent pas d'une signature Authenticode.
 
 ## Vos données restent sur votre ordinateur
 
-Sous Windows, les fichiers sont conservés dans :
+Le dossier de données dépend du système :
+
+| Système | Dossier |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\EvoFarm\` |
+| macOS | `~/Library/Application Support/EvoFarm/` |
+| Linux | `$XDG_DATA_HOME/EvoFarm/`, ou `~/.local/share/EvoFarm/` si cette variable est absente |
+
+Son contenu est le même sur les trois plateformes :
 
 ```text
-%LOCALAPPDATA%\EvoFarm\data.json      Données et brouillons courants
-%LOCALAPPDATA%\EvoFarm\data.json.bak  Copie de secours
-%LOCALAPPDATA%\EvoFarm\saves\        Sauvegardes nommées
+data.json      Données et brouillons courants
+data.json.bak  Copie de secours
+saves/         Sauvegardes nommées
 ```
 
-Remplacer l'exécutable pour installer une nouvelle version conserve ces fichiers.
+Fermez l'application puis remplacez le programme, le bundle ou le dossier portable pour mettre à jour EvoFarm. Les données sont conservées dans leur dossier séparé.
 
 Les anciens emplacements sont reconnus automatiquement lorsqu'aucune sauvegarde EvoFarm n'existe. Les anciens fichiers restent conservés ; les nouveaux enregistrements utilisent le dossier EvoFarm. Si un fichier principal est invalide, sa copie de secours est essayée. Une erreur est signalée si les deux fichiers prioritaires sont illisibles.
 
-**Importer un JSON remplace les données actuellement chargées.** Créez une sauvegarde nommée si vous souhaitez conserver plusieurs historiques.
+**Importer un JSON remplace les données actuellement chargées.** Créez une sauvegarde nommée si vous souhaitez conserver plusieurs historiques. Pour transférer vos données entre ordinateurs ou systèmes, copiez manuellement `data.json` depuis le dossier de données puis importez cette copie sur l'autre ordinateur. Aucune synchronisation automatique entre appareils n'est fournie.
 
 ## Compiler et vérifier le projet
 
-Prérequis : Rust avec la cible `x86_64-pc-windows-msvc`, les outils C++ de Visual Studio et le SDK Windows. La CI utilise Rust **1.93.0**.
+La CI utilise Rust **1.93.0**. Installez **Python 3.11 ou ultérieur** pour les scripts de packaging Unix et leurs tests. Les commandes suivantes vérifient le code sur le système courant :
 
-```powershell
+```text
 cargo run --locked
 cargo fmt --all -- --check
 cargo test --locked --all-targets
 cargo clippy --locked --all-targets -- -D warnings
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-packaging.ps1
 cargo install cargo-audit --version 0.22.1 --locked
 cargo audit
 ```
 
-Construire la distribution Windows :
+Tests Python : `python3 -m unittest discover -s scripts -p 'test_*.py'`. Sous Windows, utilisez `py -3.13` ou votre interpréteur Python 3.11+ à la place de `python3`.
+
+### Distribution Windows
+
+Prérequis : cible Rust `x86_64-pc-windows-msvc`, outils C++ de Visual Studio et SDK Windows.
 
 ```powershell
+rustup target add x86_64-pc-windows-msvc
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-packaging.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-release.ps1
 ```
 
-Le script compile en release avec `Cargo.lock`, puis produit à la racine **EvoFarm.exe**, **EvoFarm-Windows-x64.zip** et **SHA256SUMS**. Le ZIP contient le programme et son mode d'emploi ; les sources sont disponibles dans ce dépôt et dans les archives source des releases. Les fichiers personnels, caches et captures de contrôle en sont exclus.
+Les 21 scénarios PowerShell vérifient le packaging Windows. Le script de construction compile en release avec `Cargo.lock`, puis produit à la racine **EvoFarm.exe**, **EvoFarm-Windows-x64.zip** et **SHA256SUMS**. Ce manifeste local couvre seulement les deux produits Windows. Le ZIP contient le programme et son mode d'emploi.
 
 La signature locale est facultative : les trois variables `SIGNTOOL_EXE`, `SIGN_CERT_PATH` et `SIGN_CERT_PASSWORD` doivent être configurées ensemble. Une erreur de compilation, de signature ou d'archivage interrompt le script.
+
+### Distribution Linux
+
+La construction s'effectue sur Linux x64. Pour une base comparable à la release, utilisez Ubuntu 22.04 avec les outils de compilation et bibliothèques graphiques :
+
+```bash
+sudo apt install build-essential pkg-config libx11-dev libx11-xcb-dev \
+  libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev \
+  libxkbcommon-x11-0 libgl1-mesa-dev libegl1-mesa-dev libwayland-dev
+rustup target add x86_64-unknown-linux-gnu
+python3 scripts/build-unix-release.py --platform linux
+```
+
+Le script produit **dist/EvoFarm-Linux-x64.tar.gz** et **dist/SHA256SUMS-linux**.
+
+### Distribution macOS universelle
+
+La construction s'effectue sur un Mac avec les outils en ligne de commande de Xcode (`xcode-select --install`), Python 3.11+ et les deux cibles Rust :
+
+```bash
+rustup target add x86_64-apple-darwin aarch64-apple-darwin
+python3 scripts/build-unix-release.py --platform macos
+```
+
+Le script compile les deux architectures, les réunit avec `lipo`, génère l'icône ICNS à partir de `logo.png`, puis signe et vérifie le bundle. Il produit **dist/EvoFarm-macOS-universal.zip** et **dist/SHA256SUMS-macos**. `MACOSX_DEPLOYMENT_TARGET` vaut `11.0` par défaut ; le relever limite les systèmes pouvant lancer votre compilation locale.
+
+Les scripts de construction respectent `CARGO_TARGET_DIR`, relatif au projet ou absolu. Le script Unix accepte également `--output-dir`. Les archives contiennent uniquement les fichiers nécessaires à la distribution ; les sources, données personnelles, caches et captures de contrôle en sont exclus.
+
+### Contrôle visuel Windows
 
 Sur un bureau Windows disponible, un test complémentaire génère des captures des écrans à plusieurs tailles et facteurs DPI, avec des données fictives :
 
@@ -104,9 +182,9 @@ Les captures et leur manifeste sont enregistrés dans `target/qa/visual`. Ce con
 
 ## Publication
 
-La [CI Windows](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/actions/workflows/ci.yml) vérifie le format, Clippy, les tests, le packaging et les dépendances avant de construire les artefacts.
+La [CI multiplateforme](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/actions/workflows/ci.yml) utilise **Windows 2022 x64, Ubuntu 22.04 x64, macOS 15 ARM64 et macOS 15 Intel**. Elle vérifie le format, Clippy, les tests Rust, les scripts de packaging et les dépendances. Des contrôles de démarrage complètent la validation des programmes Linux et macOS. Chaque architecture macOS exécute ses tests nativement.
 
-Un tag `vX.Y.Z` correspondant à la version de `Cargo.toml` lance la même validation, puis publie les trois fichiers dans une GitHub Release. Les binaires sont distribués par les releases et ne sont pas stockés dans l'historique courant des sources.
+Un tag `vX.Y.Z` correspondant à la version de `Cargo.toml` lance cette validation avant publication. La GitHub Release réunit **EvoFarm.exe**, **EvoFarm-Windows-x64.zip**, **EvoFarm-Linux-x64.tar.gz**, **EvoFarm-macOS-universal.zip** et un **SHA256SUMS global de quatre lignes**. Les sources restent disponibles dans le dépôt et les archives source de GitHub ; les binaires ne sont pas stockés dans l'historique courant des sources.
 
 ## Crédits
 

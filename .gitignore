@@ -38,3 +38,7 @@ memory.md
 /SHA256SUMS
 /dist/
 *.exe.sha256
+
+# Je garde les caches des tests Python hors des sources.
+__pycache__/
+*.pyc
