@@ -11,6 +11,7 @@ import shlex
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -303,8 +304,8 @@ class UnixPackagingTests(unittest.TestCase):
         arguments[-1] = str(portable)
         subprocess.run(arguments, check=True, env=env)
         self.assertEqual(marker.read_text("utf-8"), str(directory / "evofarm"))
-        if shutil.which("gio"):
-            # Je vérifie aussi l'interprétation réelle du fichier Desktop Entry par GLib.
+        if sys.platform == "linux" and shutil.which("gio"):
+            # Je vérifie aussi le lancement Desktop Entry par GLib sur Linux, où cette commande est prise en charge.
             for launcher in (installed,):
                 marker.unlink()
                 launched = subprocess.run(["gio", "launch", str(launcher)], env=env, capture_output=True)
