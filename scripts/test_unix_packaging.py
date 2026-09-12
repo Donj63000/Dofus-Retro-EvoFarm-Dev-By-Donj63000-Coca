@@ -38,7 +38,8 @@ class UnixPackagingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="evofarm packaging [test] ")
         self.addCleanup(self.temporary.cleanup)
-        self.project = Path(self.temporary.name)
+        # Je compare les chemins physiques, notamment /private/var derrière /var sur macOS.
+        self.project = Path(self.temporary.name).resolve()
         (self.project / "Cargo.toml").write_text('[package]\nname="evofarm"\nversion="0.3.0"\n', encoding="utf-8")
         (self.project / "README.txt").write_text("Dofus Retro EvoFarm [Dev By Donj63000(Coca)]\n", encoding="utf-8")
         (self.project / "logo.png").write_bytes(b"provided logo")
@@ -162,6 +163,25 @@ class UnixPackagingTests(unittest.TestCase):
         archive, checksum = self.build("linux", output_dir=self.project / "other [output]")
         self.assertEqual(archive.parent, self.project / "other [output]")
         self.assertEqual(checksum.parent, archive.parent)
+
+    @unittest.skipUnless(os.name == "posix", "Je reproduis les alias de dossiers temporaires Unix.")
+    def test_project_alias_uses_physical_paths_for_build_and_outputs(self) -> None:
+        alias = self.project / "temporary directory alias"
+        alias.symlink_to(self.project, target_is_directory=True)
+        for platform in ("linux", "macos"):
+            with self.subTest(platform=platform), patch.object(packaging, "run_command", side_effect=self.fake_tools):
+                archive, checksum = packaging.build_release(
+                    alias, platform, output_dir=alias / "linked output",
+                    environment={"CARGO_TARGET_DIR": "relative targets"},
+                )
+                self.assertEqual(archive.parent, self.project / "linked output")
+                self.assertEqual(checksum.parent, archive.parent)
+                self.assert_checksum(archive, checksum)
+                for command, _ in self.commands:
+                    self.assertTrue(all(str(alias) not in argument for argument in command))
+                cargo = [command for command, _ in self.commands if command[0] == "cargo"]
+                self.assertTrue(all(command[command.index("--manifest-path") + 1] == str(self.project / "Cargo.toml")
+                                    for command in cargo))
 
     def test_optional_licenses_are_preserved_for_both_platforms(self) -> None:
         (self.project / "LICENSE.md").write_text("Author's license\n", encoding="utf-8", newline="\n")
