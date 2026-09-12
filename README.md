@@ -19,9 +19,13 @@ EvoFarm transforme vos résultats de jeu en bilans clairs : enregistrez vos sess
 
 Son interface bleu nuit, cyan et argent réunit les portraits des douze classes, des formulaires lisibles et des graphiques. Le logo, le fond et les icônes sont intégrés au programme.
 
-![Aperçu d’EvoFarm : suivi des zones et classement des sessions](docs/images/apercu.png)
+![EvoFarm après un mois fictif : 60 sessions et courbes de progression par activité](docs/demo/images/01-bilan-mensuel.png)
 
-*Aperçu de l’application avec des données de démonstration.*
+**Un mois avec EvoFarm : 60 sessions, 20 jours d'activité et trois classes.** Cette démonstration suit un joueur du 14 août au 12 septembre 2026 : zones, donjons, captures en duo/trio et PL arène. Les formulaires remplis, classements, filtres et sauvegardes montrent comment exploiter son historique au quotidien.
+
+Les données et prix sont **fictifs**. Les **11 107 000 kamas** affichés regroupent la valeur estimée des ressources des zones et les bénéfices après coûts des autres activités.
+
+**[Découvrir les 12 captures expliquées](docs/demo/README.md)** · **[Télécharger le mois fictif en JSON](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/mois-demo.json)** · **[Comment importer la démo](docs/demo/README.md#importer-la-demo)**
 
 ## Télécharger et commencer
 

@@ -9,6 +9,9 @@ mod storage;
 mod theme;
 mod ui;
 
+#[cfg(test)]
+mod demo;
+
 #[cfg(all(test, target_os = "windows"))]
 mod visual_qa;
 
@@ -121,6 +124,11 @@ pub struct NamedSaveRenameState {
 }
 
 pub struct MyApp {
+    // Je fige uniquement les contrôles de démonstration, sans changer l'horloge du logiciel livré.
+    #[cfg(test)]
+    pub review_now: Option<chrono::NaiveDateTime>,
+    #[cfg(test)]
+    pub review_scroll_offset: Option<f32>,
     pub data: AppData,
     pub current_tab: Tab,
     pub zone_form: ZoneForm,
@@ -172,6 +180,10 @@ pub struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
+            #[cfg(test)]
+            review_now: None,
+            #[cfg(test)]
+            review_scroll_offset: None,
             data: AppData::default(),
             current_tab: Tab::Zones,
             zone_form: ZoneForm::default(),

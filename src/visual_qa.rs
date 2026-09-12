@@ -1,6 +1,6 @@
 #![cfg(target_os = "windows")]
 
-use crate::models::{DofusClass, DurationInput, Tab};
+use crate::models::{DofusClass, DurationInput, PartyMode, Tab};
 use crate::{reports, theme, MyApp};
 use eframe::egui::{self, ColorImage, Event, ViewportCommand};
 use std::path::{Path, PathBuf};
@@ -36,6 +36,7 @@ struct Scenario {
     pixels_per_point: f32,
     bar_chart: bool,
     dialog: Option<ScenarioDialog>,
+    demo_view: Option<DemoView>,
 }
 
 impl Scenario {
@@ -45,6 +46,9 @@ impl Scenario {
     }
 
     fn file_name(self) -> String {
+        if self.demo_view.is_some() {
+            return format!("{}.png", self.name);
+        }
         let chart = if self.tab == Tab::Bilans {
             if self.bar_chart {
                 "-barres"
@@ -85,6 +89,7 @@ fn scenarios() -> Vec<Scenario> {
                     pixels_per_point,
                     bar_chart: logical_size[0] == 920,
                     dialog: None,
+                    demo_view: None,
                 });
             }
         }
@@ -98,6 +103,7 @@ fn scenarios() -> Vec<Scenario> {
             pixels_per_point: 1.0,
             bar_chart: true,
             dialog: None,
+            demo_view: None,
         });
     }
     result.push(Scenario {
@@ -107,6 +113,7 @@ fn scenarios() -> Vec<Scenario> {
         pixels_per_point: 1.0,
         bar_chart: false,
         dialog: None,
+        demo_view: None,
     });
     for (dialog, name) in [
         (ScenarioDialog::NamedSave, "sauvegarder-session"),
@@ -119,12 +126,140 @@ fn scenarios() -> Vec<Scenario> {
             pixels_per_point: 1.25,
             bar_chart: false,
             dialog: Some(dialog),
+            demo_view: None,
         });
     }
     result
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DemoView {
+    Month,
+    Week,
+    Details,
+    Search,
+    Zone,
+    Dungeon,
+    Duo,
+    Trio,
+    Arena,
+    Edit,
+    Save,
+    Library,
+}
+
+fn demo_scenarios() -> Vec<Scenario> {
+    use DemoView::*;
+    [
+        (Month, Tab::Bilans, "01-bilan-mensuel"),
+        (Week, Tab::Bilans, "02-bilan-hebdomadaire"),
+        (Details, Tab::Bilans, "03-activites-classes-historique"),
+        (Search, Tab::RechercheActivite, "04-recherche-activite"),
+        (Zone, Tab::Zones, "05-zones"),
+        (Dungeon, Tab::Donjons, "06-donjons"),
+        (Duo, Tab::DuoTrio, "07-duo"),
+        (Trio, Tab::DuoTrio, "08-trio"),
+        (Arena, Tab::PlArene, "09-pl-arene"),
+        (Edit, Tab::Zones, "10-modifier-session"),
+        (Save, Tab::Zones, "11-sauvegarder"),
+        (Library, Tab::Zones, "12-charger"),
+    ]
+    .into_iter()
+    .map(|(view, tab, name)| Scenario {
+        tab,
+        name,
+        logical_size: match view {
+            Save | Library => [1180, 820],
+            Zone | Dungeon | Duo | Trio | Arena | Edit => [1440, 1600],
+            // Je conserve un PNG de 1440 × 1100 avec un zoom natif à 90 % pour la légende complète.
+            Month | Week => [1600, 1222],
+            _ => [1440, 1100],
+        },
+        pixels_per_point: if matches!(view, Month | Week) {
+            0.9
+        } else {
+            1.0
+        },
+        bar_chart: view == Week,
+        dialog: match view {
+            Save => Some(ScenarioDialog::NamedSave),
+            Library => Some(ScenarioDialog::NamedLoad),
+            _ => None,
+        },
+        demo_view: Some(view),
+    })
+    .collect()
+}
+
+fn review_scenarios(demo: bool) -> Vec<Scenario> {
+    if demo {
+        demo_scenarios()
+    } else {
+        scenarios()
+    }
+}
+
+fn configure_demo_scenario(app: &mut MyApp, scenario: Scenario) {
+    // Je recharge la même source après chaque vue pour isoler filtres, brouillons et dialogues.
+    app.apply_persisted_state(crate::demo::month_state());
+    app.current_tab = scenario.tab;
+    app.review_now = Some(crate::demo::reference_time());
+    app.review_scroll_offset = Some(0.0);
+    app.report_period = reports::ReportPeriod::Last30Days;
+    app.report_categories = reports::ReportCategoryFilter::default();
+    app.report_bar_mode = scenario.bar_chart;
+    app.activity_search_class = None;
+    app.activity_search_time = DurationInput::default();
+    app.named_saves.clear();
+    app.clear_status();
+    match scenario.demo_view.unwrap() {
+        DemoView::Week => app.report_period = reports::ReportPeriod::Last7Days,
+        DemoView::Details => app.review_scroll_offset = Some(935.0),
+        DemoView::Search => {
+            app.activity_search_class = Some(DofusClass::Cra);
+            app.activity_search_time = DurationInput {
+                hours: "01".into(),
+                ..DurationInput::default()
+            };
+            app.activity_search_time_touched = true;
+        }
+        DemoView::Trio => {
+            let entry = app
+                .data
+                .duo_trios
+                .iter()
+                .find(|e| e.party_mode == PartyMode::Trio)
+                .unwrap();
+            app.duo_trio_form = crate::duo_trio_form_from_entry(entry);
+            app.duo_trio_form.recorded_at_input = "2026-09-12 23:45".into();
+            app.duo_trio_search = "Blop Multicolore".into();
+        }
+        DemoView::Duo => app.duo_trio_search = "Dragon Cochon".into(),
+        DemoView::Arena => app.arena_search = "Captures Blop Royal".into(),
+        DemoView::Edit => {
+            app.start_zone_edit(0);
+            let edit = app.zone_edit.as_mut().unwrap();
+            let value =
+                crate::calculations::parse_f32(&edit.form.session_total_kamas).unwrap() + 15_000.0;
+            edit.form.session_total_kamas = crate::calculations::format_number(value);
+        }
+        DemoView::Save => {
+            app.show_named_save_dialog = true;
+            app.named_save_name_input = "Mon mois de farm — bilan final".into();
+        }
+        DemoView::Library => {
+            app.show_named_load_dialog = true;
+            app.named_saves = crate::demo::save_summaries();
+        }
+        _ => {}
+    }
+}
+
 fn configure_scenario(app: &mut MyApp, scenario: Scenario) {
+    if scenario.demo_view.is_some() {
+        configure_demo_scenario(app, scenario);
+        return;
+    }
     app.current_tab = scenario.tab;
     app.report_bar_mode = scenario.bar_chart;
     app.show_named_save_dialog = scenario.dialog == Some(ScenarioDialog::NamedSave);
@@ -195,6 +330,8 @@ enum CaptureStage {
 }
 
 struct VisualReview {
+    demo: bool,
+    expected_state: Option<serde_json::Value>,
     app: MyApp,
     scenarios: Vec<Scenario>,
     current: usize,
@@ -215,6 +352,15 @@ impl VisualReview {
     }
 
     fn save_capture(&mut self, image: &ColorImage) -> Result<(), String> {
+        if let Some(expected) = &self.expected_state {
+            let actual = serde_json::to_value(self.app.build_persisted_state())
+                .map_err(|e| e.to_string())?;
+            if &actual != expected {
+                return Err(
+                    "Le rendu a modifié les données ou brouillons de démonstration.".into(),
+                );
+            }
+        }
         let scenario = self.scenarios[self.current];
         let file_name = scenario.file_name();
         let path = self.output.join(&file_name);
@@ -244,6 +390,9 @@ impl VisualReview {
                 "pixel_size": image.size,
                 "bar_chart": scenario.tab == Tab::Bilans && scenario.bar_chart,
                 "dialog": scenario.dialog.map(ScenarioDialog::label),
+                "demo": self.demo,
+                "reference_time": self.app.review_now,
+                "scroll_offset": self.app.review_scroll_offset,
             }));
         println!(
             "Capture {}/{} : {}",
@@ -325,6 +474,10 @@ fn isolate_input(input: &mut egui::RawInput) {
 impl eframe::App for VisualReview {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, input: &mut egui::RawInput) {
         isolate_input(input);
+        if self.demo {
+            // Je laisse les animations d'ouverture aboutir avec une progression déterministe.
+            input.time = Some(self.frames as f64 / 10.0);
+        }
     }
 
     fn persist_egui_memory(&self) -> bool {
@@ -357,7 +510,14 @@ impl eframe::App for VisualReview {
         );
         match &mut self.stage {
             CaptureStage::Configure => {
+                if self.demo {
+                    ctx.memory_mut(|memory| *memory = egui::Memory::default());
+                    theme::apply_theme(ctx);
+                }
                 configure_scenario(&mut self.app, scenario);
+                self.expected_state = self
+                    .demo
+                    .then(|| serde_json::to_value(self.app.build_persisted_state()).unwrap());
                 ctx.set_pixels_per_point(scenario.pixels_per_point);
                 ctx.send_viewport_cmd(ViewportCommand::InnerSize(requested_size));
                 self.stage = CaptureStage::Settle {
@@ -395,7 +555,7 @@ impl eframe::App for VisualReview {
                     );
                     return;
                 }
-                if *stable_frames >= 4 {
+                if *stable_frames >= if self.demo { 8 } else { 4 } {
                     ctx.send_viewport_cmd(ViewportCommand::Screenshot);
                     self.stage = CaptureStage::AwaitImage {
                         requested: Instant::now(),
@@ -496,8 +656,15 @@ fn fixture_app(ctx: &egui::Context) -> MyApp {
     app
 }
 
-fn run_review(control: Arc<Mutex<Option<egui::Context>>>, output: &Path) -> Result<usize, String> {
+fn run_review(
+    control: Arc<Mutex<Option<egui::Context>>>,
+    output: &Path,
+    demo: bool,
+) -> Result<usize, String> {
     std::fs::create_dir_all(output).map_err(|error| error.to_string())?;
+    if demo {
+        crate::demo::export_to(output)?;
+    }
     let progress = Arc::new(Mutex::new(ReviewProgress::default()));
     let progress_for_app = Arc::clone(&progress);
     let app_output = output.to_path_buf();
@@ -527,8 +694,10 @@ fn run_review(control: Arc<Mutex<Option<egui::Context>>>, output: &Path) -> Resu
             theme::apply_theme(&cc.egui_ctx);
             *control.lock().unwrap() = Some(cc.egui_ctx.clone());
             Ok(Box::new(VisualReview {
+                demo,
+                expected_state: None,
                 app: fixture_app(&cc.egui_ctx),
-                scenarios: scenarios(),
+                scenarios: review_scenarios(demo),
                 current: 0,
                 stage: CaptureStage::Configure,
                 output: app_output,
@@ -544,7 +713,7 @@ fn run_review(control: Arc<Mutex<Option<egui::Context>>>, output: &Path) -> Resu
     let progress = progress.lock().unwrap();
     let manifest = serde_json::json!({
         "application": REVIEW_TITLE,
-        "expected_captures": scenarios().len(),
+        "expected_captures": review_scenarios(demo).len(),
         "captures": progress.captures,
         "error": progress.error,
     });
@@ -559,11 +728,11 @@ fn run_review(control: Arc<Mutex<Option<egui::Context>>>, output: &Path) -> Resu
             output.join("manifest.json").display()
         ));
     }
-    if progress.captures.len() != scenarios().len() {
+    if progress.captures.len() != review_scenarios(demo).len() {
         return Err(format!(
             "Fenêtre fermée avant la fin : {}/{} captures.",
             progress.captures.len(),
-            scenarios().len()
+            review_scenarios(demo).len()
         ));
     }
     Ok(progress.captures.len())
@@ -572,12 +741,26 @@ fn run_review(control: Arc<Mutex<Option<egui::Context>>>, output: &Path) -> Resu
 #[test]
 #[ignore = "Ouvre une fenêtre isolée et capture les écrans et dialogues dans target/qa/visual."]
 fn native_visual_review() {
+    execute_review(false);
+}
+
+#[test]
+#[ignore = "Capture les douze situations du mois fictif dans target/qa/demo."]
+fn native_demo_review() {
+    execute_review(true);
+}
+
+fn execute_review(demo: bool) {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
     let output = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("target/qa/visual")
+        .join(if demo {
+            "target/qa/demo"
+        } else {
+            "target/qa/visual"
+        })
         .join(format!("run-{unique}"));
     let control = Arc::new(Mutex::new(None::<egui::Context>));
     let worker_control = Arc::clone(&control);
@@ -587,7 +770,7 @@ fn native_visual_review() {
     let worker = std::thread::Builder::new()
         .name("evofarm-visual-review".to_string())
         .spawn(move || {
-            let result = run_review(worker_control, &worker_output);
+            let result = run_review(worker_control, &worker_output, demo);
             let _ = sender.send(result);
         })
         .unwrap();
@@ -607,9 +790,194 @@ fn native_visual_review() {
         .expect("Le thread de contrôle visuel doit se terminer proprement.");
     assert_eq!(
         result.unwrap_or_else(|error| panic!("{error}")),
-        scenarios().len()
+        review_scenarios(demo).len()
     );
     println!("Contrôle visuel terminé : {}", output.display());
+}
+
+#[test]
+fn demo_scenarios_are_complete_and_reset_transient_state() {
+    let scenarios = demo_scenarios();
+    assert_eq!(scenarios.len(), 12);
+    assert_eq!(
+        scenarios
+            .iter()
+            .map(|s| s.file_name())
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        12
+    );
+    let source = crate::demo::month_state();
+    let mut app = MyApp::default();
+    for scenario in &scenarios {
+        app.report_categories.zones = false;
+        app.zone_form_error = Some("Erreur ancienne".into());
+        app.zone_search = "Ancien filtre".into();
+        app.show_delete_local_save_confirm = true;
+        app.show_named_load_dialog = true;
+        app.named_saves = crate::demo::save_summaries();
+        app.set_status(crate::StatusKind::Error, "Erreur ancienne");
+        configure_scenario(&mut app, *scenario);
+        assert_eq!(
+            serde_json::to_value(&app.data).unwrap(),
+            serde_json::to_value(&source.data).unwrap()
+        );
+        assert!(app.report_categories.zones);
+        assert!(app.zone_form_error.is_none());
+        assert!(app.zone_search.is_empty());
+        assert!(app.status.is_none());
+        assert!(!app.show_delete_local_save_confirm);
+        assert_eq!(
+            app.show_named_load_dialog,
+            scenario.demo_view == Some(DemoView::Library)
+        );
+        assert_eq!(
+            app.named_saves.len(),
+            if scenario.demo_view == Some(DemoView::Library) {
+                4
+            } else {
+                0
+            }
+        );
+        assert_eq!(app.review_now, Some(crate::demo::reference_time()));
+        assert_eq!(app.current_tab, scenario.tab);
+        if scenario.demo_view == Some(DemoView::Edit) {
+            assert!(app.zone_edit.is_some());
+        } else {
+            assert!(app.zone_edit.is_none());
+        }
+        let size = scenario.pixel_size();
+        assert_eq!(
+            size,
+            if scenario.dialog.is_some() {
+                [1180, 820]
+            } else if matches!(
+                scenario.demo_view,
+                Some(
+                    DemoView::Zone
+                        | DemoView::Dungeon
+                        | DemoView::Duo
+                        | DemoView::Trio
+                        | DemoView::Arena
+                        | DemoView::Edit
+                )
+            ) {
+                [1440, 1600]
+            } else {
+                [1440, 1100]
+            }
+        );
+    }
+    configure_scenario(&mut app, scenarios[0]);
+    assert_eq!(
+        serde_json::to_value(app.build_persisted_state()).unwrap(),
+        serde_json::to_value(source).unwrap()
+    );
+    assert_eq!(app.review_scroll_offset, Some(0.0));
+    assert_eq!(app.activity_search_class, None);
+}
+
+fn collect_visible_texts<'a>(shape: &'a egui::Shape, clip: egui::Rect, texts: &mut Vec<&'a str>) {
+    match shape {
+        egui::Shape::Vec(shapes) => {
+            for shape in shapes {
+                collect_visible_texts(shape, clip, texts);
+            }
+        }
+        egui::Shape::Text(text) => {
+            let bounds = text.galley.rect.translate(text.pos.to_vec2());
+            if clip.expand(1.0).contains_rect(bounds) {
+                texts.push(text.galley.job.text.as_str());
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn demo_views_keep_their_main_controls_visible_and_preserve_data() {
+    for scenario in demo_scenarios() {
+        let ctx = egui::Context::default();
+        theme::apply_theme(&ctx);
+        ctx.set_pixels_per_point(scenario.pixels_per_point);
+        let mut app = fixture_app(&ctx);
+        configure_scenario(&mut app, scenario);
+        let expected = serde_json::to_value(app.build_persisted_state()).unwrap();
+        let rect = egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(
+                scenario.logical_size[0] as f32,
+                scenario.logical_size[1] as f32,
+            ),
+        );
+        let mut output = None;
+        for frame in 0..12 {
+            output = Some(ctx.run(
+                egui::RawInput {
+                    screen_rect: Some(rect),
+                    time: Some(frame as f64 / 10.0),
+                    ..egui::RawInput::default()
+                },
+                |ctx| app.render(ctx),
+            ));
+        }
+        let output = output.unwrap();
+        let mut texts = Vec::new();
+        for clipped in &output.shapes {
+            collect_visible_texts(
+                &clipped.shape,
+                clipped.clip_rect.intersect(rect),
+                &mut texts,
+            );
+        }
+        let required: &[&str] = match scenario.demo_view.unwrap() {
+            DemoView::Month => &["11 107 000", "5 561 000", "Graphique des gains", "30 jours"],
+            DemoView::Week => &["2 330 500", "Mode bâton", "7 jours"],
+            DemoView::Details => &["Top activités", "Bilan par classe", "Sessions récentes"],
+            DemoView::Search => &["Filtres de recherche", "Temps disponible", "250 500"],
+            DemoView::Zone => &[
+                "Ajouter la zone",
+                "Prévision immédiate",
+                "Classement des zones",
+            ],
+            DemoView::Dungeon => &[
+                "Ajouter le donjon",
+                "Prévision immédiate",
+                "Classement des donjons",
+            ],
+            DemoView::Duo | DemoView::Trio => &[
+                "Ajouter le run",
+                "Prevision immediate",
+                "Prix de vente de la capture pleine",
+            ],
+            DemoView::Arena => &["Ajouter le PL arène", "Prévision immédiate", "-41 000"],
+            DemoView::Edit => &[
+                "Modifier la zone",
+                "Prévision mise à jour",
+                "Enregistrer",
+                "Annuler",
+            ],
+            DemoView::Save => &["Nom de la sauvegarde", "Résumé de l'état actuel"],
+            DemoView::Library => &[
+                "Mon mois de farm — bilan final",
+                "Mon historique au 03/09/2026",
+                "Renommer",
+            ],
+        };
+        for required in required {
+            assert!(
+                texts.iter().any(|text| text.contains(required)),
+                "Texte absent ou coupé dans {} : {required}",
+                scenario.name
+            );
+        }
+        assert_eq!(
+            serde_json::to_value(app.build_persisted_state()).unwrap(),
+            expected,
+            "Le rendu de {} doit conserver les données et brouillons",
+            scenario.name
+        );
+    }
 }
 
 #[test]

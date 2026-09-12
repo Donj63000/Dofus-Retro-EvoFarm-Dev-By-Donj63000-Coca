@@ -1055,22 +1055,27 @@ impl MyApp {
                     .inner_margin(egui::Margin::symmetric(14.0, 8.0)),
             )
             .show(ctx, |ui| {
-                egui::ScrollArea::vertical()
-                    .auto_shrink([true, false])
-                    .show(ui, |ui| {
-                        let available_width = ui.available_width();
-                        ui.set_width(available_width);
-                        ui.set_max_width(available_width);
+                let scroll = egui::ScrollArea::vertical().auto_shrink([true, false]);
+                // Je défile dans les captures de contrôle sans déplacer la vue d'un utilisateur.
+                #[cfg(test)]
+                let scroll = match self.review_scroll_offset {
+                    Some(offset) => scroll.vertical_scroll_offset(offset),
+                    None => scroll,
+                };
+                scroll.show(ui, |ui| {
+                    let available_width = ui.available_width();
+                    ui.set_width(available_width);
+                    ui.set_max_width(available_width);
 
-                        match self.current_tab {
-                            Tab::Bilans => self.ui_bilans(ui),
-                            Tab::RechercheActivite => self.ui_activity_search(ui),
-                            Tab::Zones => self.ui_zones(ui),
-                            Tab::Donjons => self.ui_dungeons(ui),
-                            Tab::DuoTrio => self.ui_duo_trios(ui),
-                            Tab::PlArene => self.ui_arenas(ui),
-                        }
-                    });
+                    match self.current_tab {
+                        Tab::Bilans => self.ui_bilans(ui),
+                        Tab::RechercheActivite => self.ui_activity_search(ui),
+                        Tab::Zones => self.ui_zones(ui),
+                        Tab::Donjons => self.ui_dungeons(ui),
+                        Tab::DuoTrio => self.ui_duo_trios(ui),
+                        Tab::PlArene => self.ui_arenas(ui),
+                    }
+                });
             });
 
         if self.show_load_confirm {
@@ -1582,6 +1587,8 @@ impl MyApp {
 
     pub fn ui_bilans(&mut self, ui: &mut egui::Ui) {
         let now = local_now();
+        #[cfg(test)]
+        let now = self.review_now.unwrap_or(now);
         let summary =
             build_report_summary(&self.data, self.report_period, self.report_categories, now);
 

@@ -1,0 +1,739 @@
+{
+  "schema_version": 2,
+  "data": {
+    "zones": [
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-12T21:25:00",
+        "session_time_seconds": 2760.0,
+        "session_total_kamas": 278000.0,
+        "kamas_per_hour": 362608.72
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "cra",
+        "recorded_at": "2026-08-21T17:55:00",
+        "session_time_seconds": 2820.0,
+        "session_total_kamas": 261000.0,
+        "kamas_per_hour": 333191.47
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "cra",
+        "recorded_at": "2026-08-21T21:05:00",
+        "session_time_seconds": 3240.0,
+        "session_total_kamas": 280000.0,
+        "kamas_per_hour": 311111.12
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-06T20:55:00",
+        "session_time_seconds": 3900.0,
+        "session_total_kamas": 331000.0,
+        "kamas_per_hour": 305538.47
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "feca",
+        "recorded_at": "2026-08-23T21:15:00",
+        "session_time_seconds": 3660.0,
+        "session_total_kamas": 299000.0,
+        "kamas_per_hour": 294098.38
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-28T18:05:00",
+        "session_time_seconds": 2940.0,
+        "session_total_kamas": 222000.0,
+        "kamas_per_hour": 271836.75
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-08-30T18:15:00",
+        "session_time_seconds": 3360.0,
+        "session_total_kamas": 241000.0,
+        "kamas_per_hour": 258214.28
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-08-30T23:00:00",
+        "session_time_seconds": 3780.0,
+        "session_total_kamas": 260000.0,
+        "kamas_per_hour": 247619.05
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "cra",
+        "recorded_at": "2026-08-31T20:55:00",
+        "session_time_seconds": 4200.0,
+        "session_total_kamas": 279000.0,
+        "kamas_per_hour": 239142.86
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "cra",
+        "recorded_at": "2026-09-02T21:05:00",
+        "session_time_seconds": 4620.0,
+        "session_total_kamas": 298000.0,
+        "kamas_per_hour": 232207.78
+      },
+      {
+        "name": "Coin des Scarafeuilles",
+        "character_class": "cra",
+        "recorded_at": "2026-09-05T18:15:00",
+        "session_time_seconds": 5040.0,
+        "session_total_kamas": 317000.0,
+        "kamas_per_hour": 226428.58
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "cra",
+        "recorded_at": "2026-09-05T19:50:00",
+        "session_time_seconds": 3060.0,
+        "session_total_kamas": 183000.0,
+        "kamas_per_hour": 215294.12
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-05T23:00:00",
+        "session_time_seconds": 3480.0,
+        "session_total_kamas": 202000.0,
+        "kamas_per_hour": 208965.52
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-10T18:05:00",
+        "session_time_seconds": 4320.0,
+        "session_total_kamas": 240000.0,
+        "kamas_per_hour": 200000.0
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-10T22:50:00",
+        "session_time_seconds": 4740.0,
+        "session_total_kamas": 259000.0,
+        "kamas_per_hour": 196708.86
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "cra",
+        "recorded_at": "2026-08-14T17:45:00",
+        "session_time_seconds": 2700.0,
+        "session_total_kamas": 135000.0,
+        "kamas_per_hour": 180000.0
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-15T17:55:00",
+        "session_time_seconds": 3120.0,
+        "session_total_kamas": 154000.0,
+        "kamas_per_hour": 177692.31
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-15T22:40:00",
+        "session_time_seconds": 3540.0,
+        "session_total_kamas": 173000.0,
+        "kamas_per_hour": 175932.2
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-17T21:15:00",
+        "session_time_seconds": 3960.0,
+        "session_total_kamas": 192000.0,
+        "kamas_per_hour": 174545.45
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-20T17:45:00",
+        "session_time_seconds": 4380.0,
+        "session_total_kamas": 211000.0,
+        "kamas_per_hour": 173424.66
+      },
+      {
+        "name": "Prairies des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-20T22:30:00",
+        "session_time_seconds": 4800.0,
+        "session_total_kamas": 230000.0,
+        "kamas_per_hour": 172500.0
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "cra",
+        "recorded_at": "2026-08-27T21:05:00",
+        "session_time_seconds": 4920.0,
+        "session_total_kamas": 191000.0,
+        "kamas_per_hour": 139756.1
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "feca",
+        "recorded_at": "2026-08-25T22:30:00",
+        "session_time_seconds": 4500.0,
+        "session_total_kamas": 172000.0,
+        "kamas_per_hour": 137600.0
+      },
+      {
+        "name": "Plaines de Cania",
+        "character_class": "cra",
+        "recorded_at": "2026-08-25T17:45:00",
+        "session_time_seconds": 4080.0,
+        "session_total_kamas": 153000.0,
+        "kamas_per_hour": 135000.0
+      }
+    ],
+    "dungeons": [
+      {
+        "name": "Donjon des Rats Noirs",
+        "character_class": "feca",
+        "recorded_at": "2026-09-03T19:40:00",
+        "run_time_minutes": 30.0,
+        "gross_kamas_per_run": 183000.0,
+        "key_price": 14000.0,
+        "net_kamas_per_run": 169000.0,
+        "kamas_per_hour": 338000.0
+      },
+      {
+        "name": "Donjon des Rats Noirs",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-21T19:30:00",
+        "run_time_minutes": 31.0,
+        "gross_kamas_per_run": 182000.0,
+        "key_price": 8000.0,
+        "net_kamas_per_run": 174000.0,
+        "kamas_per_hour": 336774.2
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-09-05T21:25:00",
+        "run_time_minutes": 37.0,
+        "gross_kamas_per_run": 206000.0,
+        "key_price": 8000.0,
+        "net_kamas_per_run": 198000.0,
+        "kamas_per_hour": 321081.1
+      },
+      {
+        "name": "Donjon des Rats Noirs",
+        "character_class": "cra",
+        "recorded_at": "2026-08-24T18:15:00",
+        "run_time_minutes": 38.0,
+        "gross_kamas_per_run": 205000.0,
+        "key_price": 10000.0,
+        "net_kamas_per_run": 195000.0,
+        "kamas_per_hour": 307894.75
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-09-08T17:55:00",
+        "run_time_minutes": 44.0,
+        "gross_kamas_per_run": 229000.0,
+        "key_price": 10000.0,
+        "net_kamas_per_run": 219000.0,
+        "kamas_per_hour": 298636.38
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-08-25T19:20:00",
+        "run_time_minutes": 45.0,
+        "gross_kamas_per_run": 228000.0,
+        "key_price": 12000.0,
+        "net_kamas_per_run": 216000.0,
+        "kamas_per_hour": 288000.0
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "feca",
+        "recorded_at": "2026-08-28T19:40:00",
+        "run_time_minutes": 34.0,
+        "gross_kamas_per_run": 114000.0,
+        "key_price": 8000.0,
+        "net_kamas_per_run": 106000.0,
+        "kamas_per_hour": 187058.83
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-31T17:45:00",
+        "run_time_minutes": 41.0,
+        "gross_kamas_per_run": 137000.0,
+        "key_price": 10000.0,
+        "net_kamas_per_run": 127000.0,
+        "kamas_per_hour": 185853.66
+      },
+      {
+        "name": "Donjon des Rats Noirs",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-02T17:55:00",
+        "run_time_minutes": 48.0,
+        "gross_kamas_per_run": 160000.0,
+        "key_price": 12000.0,
+        "net_kamas_per_run": 148000.0,
+        "kamas_per_hour": 185000.0
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "cra",
+        "recorded_at": "2026-09-12T19:50:00",
+        "run_time_minutes": 33.0,
+        "gross_kamas_per_run": 115000.0,
+        "key_price": 14000.0,
+        "net_kamas_per_run": 101000.0,
+        "kamas_per_hour": 183636.38
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "cra",
+        "recorded_at": "2026-08-20T20:55:00",
+        "run_time_minutes": 49.0,
+        "gross_kamas_per_run": 159000.0,
+        "key_price": 14000.0,
+        "net_kamas_per_run": 145000.0,
+        "kamas_per_hour": 177551.02
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "feca",
+        "recorded_at": "2026-08-18T18:15:00",
+        "run_time_minutes": 42.0,
+        "gross_kamas_per_run": 136000.0,
+        "key_price": 12000.0,
+        "net_kamas_per_run": 124000.0,
+        "kamas_per_hour": 177142.86
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-08-17T18:05:00",
+        "run_time_minutes": 35.0,
+        "gross_kamas_per_run": 113000.0,
+        "key_price": 10000.0,
+        "net_kamas_per_run": 103000.0,
+        "kamas_per_hour": 176571.44
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "cra",
+        "recorded_at": "2026-08-14T19:20:00",
+        "run_time_minutes": 28.0,
+        "gross_kamas_per_run": 90000.0,
+        "key_price": 8000.0,
+        "net_kamas_per_run": 82000.0,
+        "kamas_per_hour": 175714.28
+      },
+      {
+        "name": "Donjon des Bouftous",
+        "character_class": "feca",
+        "recorded_at": "2026-09-10T19:40:00",
+        "run_time_minutes": 51.0,
+        "gross_kamas_per_run": 92000.0,
+        "key_price": 12000.0,
+        "net_kamas_per_run": 80000.0,
+        "kamas_per_hour": 94117.65
+      },
+      {
+        "name": "Donjon des Blops",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-27T19:30:00",
+        "run_time_minutes": 52.0,
+        "gross_kamas_per_run": 91000.0,
+        "key_price": 14000.0,
+        "net_kamas_per_run": 77000.0,
+        "kamas_per_hour": 88846.16
+      }
+    ],
+    "duo_trios": [
+      {
+        "name": "Blop Multicolore Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-08-27T17:55:00",
+        "party_mode": "trio",
+        "run_time_seconds": 2280.0,
+        "loot_kamas_per_run": 180000.0,
+        "capture_stone_price": 15000.0,
+        "key_unit_price": 7000.0,
+        "keys_count": 3,
+        "total_key_cost": 21000.0,
+        "full_soul_sale_price": 110000.0,
+        "gross_kamas_per_run": 290000.0,
+        "total_cost": 36000.0,
+        "net_kamas_per_run": 254000.0,
+        "kamas_per_hour": 401052.66
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "cra",
+        "recorded_at": "2026-09-08T19:30:00",
+        "party_mode": "duo",
+        "run_time_seconds": 2280.0,
+        "loot_kamas_per_run": 165000.0,
+        "capture_stone_price": 13500.0,
+        "key_unit_price": 8000.0,
+        "keys_count": 2,
+        "total_key_cost": 16000.0,
+        "full_soul_sale_price": 110000.0,
+        "gross_kamas_per_run": 275000.0,
+        "total_cost": 29500.0,
+        "net_kamas_per_run": 245500.0,
+        "kamas_per_hour": 387631.6
+      },
+      {
+        "name": "Blop Multicolore Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-09-12T18:15:00",
+        "party_mode": "trio",
+        "run_time_seconds": 2580.0,
+        "loot_kamas_per_run": 182000.0,
+        "capture_stone_price": 15000.0,
+        "key_unit_price": 9000.0,
+        "keys_count": 3,
+        "total_key_cost": 27000.0,
+        "full_soul_sale_price": 128000.0,
+        "gross_kamas_per_run": 310000.0,
+        "total_cost": 42000.0,
+        "net_kamas_per_run": 268000.0,
+        "kamas_per_hour": 373953.47
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-24T19:50:00",
+        "party_mode": "duo",
+        "run_time_seconds": 3480.0,
+        "loot_kamas_per_run": 163000.0,
+        "capture_stone_price": 13500.0,
+        "key_unit_price": 6000.0,
+        "keys_count": 2,
+        "total_key_cost": 12000.0,
+        "full_soul_sale_price": 182000.0,
+        "gross_kamas_per_run": 345000.0,
+        "total_cost": 25500.0,
+        "net_kamas_per_run": 319500.0,
+        "kamas_per_hour": 330517.22
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "cra",
+        "recorded_at": "2026-08-23T18:05:00",
+        "party_mode": "duo",
+        "run_time_seconds": 3180.0,
+        "loot_kamas_per_run": 146000.0,
+        "capture_stone_price": 12000.0,
+        "key_unit_price": 9000.0,
+        "keys_count": 2,
+        "total_key_cost": 18000.0,
+        "full_soul_sale_price": 164000.0,
+        "gross_kamas_per_run": 310000.0,
+        "total_cost": 30000.0,
+        "net_kamas_per_run": 280000.0,
+        "kamas_per_hour": 316981.12
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "feca",
+        "recorded_at": "2026-09-06T17:45:00",
+        "party_mode": "duo",
+        "run_time_seconds": 3480.0,
+        "loot_kamas_per_run": 148000.0,
+        "capture_stone_price": 12000.0,
+        "key_unit_price": 7000.0,
+        "keys_count": 2,
+        "total_key_cost": 14000.0,
+        "full_soul_sale_price": 182000.0,
+        "gross_kamas_per_run": 330000.0,
+        "total_cost": 26000.0,
+        "net_kamas_per_run": 304000.0,
+        "kamas_per_hour": 314482.75
+      },
+      {
+        "name": "Blop Multicolore Royal",
+        "character_class": "sadida",
+        "recorded_at": "2026-09-03T18:05:00",
+        "party_mode": "trio",
+        "run_time_seconds": 3180.0,
+        "loot_kamas_per_run": 131000.0,
+        "capture_stone_price": 15000.0,
+        "key_unit_price": 6000.0,
+        "keys_count": 3,
+        "total_key_cost": 18000.0,
+        "full_soul_sale_price": 164000.0,
+        "gross_kamas_per_run": 295000.0,
+        "total_cost": 33000.0,
+        "net_kamas_per_run": 262000.0,
+        "kamas_per_hour": 296603.75
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "cra",
+        "recorded_at": "2026-08-17T19:40:00",
+        "party_mode": "duo",
+        "run_time_seconds": 2580.0,
+        "loot_kamas_per_run": 112000.0,
+        "capture_stone_price": 13500.0,
+        "key_unit_price": 7000.0,
+        "keys_count": 2,
+        "total_key_cost": 14000.0,
+        "full_soul_sale_price": 128000.0,
+        "gross_kamas_per_run": 240000.0,
+        "total_cost": 27500.0,
+        "net_kamas_per_run": 212500.0,
+        "kamas_per_hour": 296511.62
+      },
+      {
+        "name": "Blop Multicolore Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-08-20T19:20:00",
+        "party_mode": "trio",
+        "run_time_seconds": 2880.0,
+        "loot_kamas_per_run": 129000.0,
+        "capture_stone_price": 15000.0,
+        "key_unit_price": 8000.0,
+        "keys_count": 3,
+        "total_key_cost": 24000.0,
+        "full_soul_sale_price": 146000.0,
+        "gross_kamas_per_run": 275000.0,
+        "total_cost": 39000.0,
+        "net_kamas_per_run": 236000.0,
+        "kamas_per_hour": 295000.0
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "feca",
+        "recorded_at": "2026-08-15T19:30:00",
+        "party_mode": "duo",
+        "run_time_seconds": 2280.0,
+        "loot_kamas_per_run": 95000.0,
+        "capture_stone_price": 12000.0,
+        "key_unit_price": 6000.0,
+        "keys_count": 2,
+        "total_key_cost": 12000.0,
+        "full_soul_sale_price": 110000.0,
+        "gross_kamas_per_run": 205000.0,
+        "total_cost": 24000.0,
+        "net_kamas_per_run": 181000.0,
+        "kamas_per_hour": 285789.47
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "feca",
+        "recorded_at": "2026-08-31T19:20:00",
+        "party_mode": "duo",
+        "run_time_seconds": 2880.0,
+        "loot_kamas_per_run": 114000.0,
+        "capture_stone_price": 13500.0,
+        "key_unit_price": 9000.0,
+        "keys_count": 2,
+        "total_key_cost": 18000.0,
+        "full_soul_sale_price": 146000.0,
+        "gross_kamas_per_run": 260000.0,
+        "total_cost": 31500.0,
+        "net_kamas_per_run": 228500.0,
+        "kamas_per_hour": 285625.0
+      },
+      {
+        "name": "Dragon Cochon",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-30T19:50:00",
+        "party_mode": "duo",
+        "run_time_seconds": 2580.0,
+        "loot_kamas_per_run": 97000.0,
+        "capture_stone_price": 12000.0,
+        "key_unit_price": 8000.0,
+        "keys_count": 2,
+        "total_key_cost": 16000.0,
+        "full_soul_sale_price": 128000.0,
+        "gross_kamas_per_run": 225000.0,
+        "total_cost": 28000.0,
+        "net_kamas_per_run": 197000.0,
+        "kamas_per_hour": 274883.72
+      }
+    ],
+    "arenas": [
+      {
+        "name": "Captures Blop Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-09-02T19:30:00",
+        "round_time_minutes": 17.0,
+        "seat_price": 30000.0,
+        "seats_sold": 6,
+        "capture_price": 95000.0,
+        "captures_count": 1,
+        "gross_revenue": 180000.0,
+        "total_capture_cost": 95000.0,
+        "net_profit": 85000.0,
+        "kamas_per_hour": 300000.0
+      },
+      {
+        "name": "Captures Bouftou Royal",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-23T19:40:00",
+        "round_time_minutes": 21.0,
+        "seat_price": 30000.0,
+        "seats_sold": 6,
+        "capture_price": 100000.0,
+        "captures_count": 1,
+        "gross_revenue": 180000.0,
+        "total_capture_cost": 100000.0,
+        "net_profit": 80000.0,
+        "kamas_per_hour": 228571.44
+      },
+      {
+        "name": "Captures Bouftou Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-08-15T21:05:00",
+        "round_time_minutes": 15.0,
+        "seat_price": 24000.0,
+        "seats_sold": 6,
+        "capture_price": 90000.0,
+        "captures_count": 1,
+        "gross_revenue": 144000.0,
+        "total_capture_cost": 90000.0,
+        "net_profit": 54000.0,
+        "kamas_per_hour": 216000.0
+      },
+      {
+        "name": "Captures Bouftou Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-08-30T21:25:00",
+        "round_time_minutes": 27.0,
+        "seat_price": 27000.0,
+        "seats_sold": 6,
+        "capture_price": 90000.0,
+        "captures_count": 1,
+        "gross_revenue": 162000.0,
+        "total_capture_cost": 90000.0,
+        "net_profit": 72000.0,
+        "kamas_per_hour": 160000.0
+      },
+      {
+        "name": "Captures Blop Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-09-10T21:15:00",
+        "round_time_minutes": 23.0,
+        "seat_price": 27000.0,
+        "seats_sold": 6,
+        "capture_price": 105000.0,
+        "captures_count": 1,
+        "gross_revenue": 162000.0,
+        "total_capture_cost": 105000.0,
+        "net_profit": 57000.0,
+        "kamas_per_hour": 148695.66
+      },
+      {
+        "name": "Captures Blop Royal",
+        "character_class": "sadida",
+        "recorded_at": "2026-08-25T20:55:00",
+        "round_time_minutes": 24.0,
+        "seat_price": 24000.0,
+        "seats_sold": 6,
+        "capture_price": 105000.0,
+        "captures_count": 1,
+        "gross_revenue": 144000.0,
+        "total_capture_cost": 105000.0,
+        "net_profit": 39000.0,
+        "kamas_per_hour": 97500.0
+      },
+      {
+        "name": "Captures Blop Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-08-18T19:50:00",
+        "round_time_minutes": 18.0,
+        "seat_price": 27000.0,
+        "seats_sold": 2,
+        "capture_price": 95000.0,
+        "captures_count": 1,
+        "gross_revenue": 54000.0,
+        "total_capture_cost": 95000.0,
+        "net_profit": -41000.0,
+        "kamas_per_hour": -136666.66
+      },
+      {
+        "name": "Captures Bouftou Royal",
+        "character_class": "cra",
+        "recorded_at": "2026-09-06T19:20:00",
+        "round_time_minutes": 20.0,
+        "seat_price": 24000.0,
+        "seats_sold": 2,
+        "capture_price": 100000.0,
+        "captures_count": 1,
+        "gross_revenue": 48000.0,
+        "total_capture_cost": 100000.0,
+        "net_profit": -52000.0,
+        "kamas_per_hour": -156000.0
+      }
+    ]
+  },
+  "drafts": {
+    "zone_form": {
+      "name": "Prairies des Blops",
+      "character_class": "sadida",
+      "recorded_at_input": "2026-09-12 23:45",
+      "session_time": {
+        "hours": "00",
+        "minutes": "46",
+        "seconds": "00"
+      },
+      "session_total_kamas": "278000"
+    },
+    "dungeon_form": {
+      "name": "Donjon des Rats Noirs",
+      "character_class": "feca",
+      "recorded_at_input": "2026-09-12 23:45",
+      "run_time": {
+        "hours": "00",
+        "minutes": "30",
+        "seconds": "00"
+      },
+      "gross_kamas_per_run": "183000",
+      "key_price": "14000"
+    },
+    "duo_trio_form": {
+      "name": "Dragon Cochon",
+      "character_class": "cra",
+      "recorded_at_input": "2026-09-12 23:45",
+      "party_mode": "duo",
+      "run_time": {
+        "hours": "00",
+        "minutes": "38",
+        "seconds": "00"
+      },
+      "loot_kamas_per_run": "165000",
+      "capture_stone_price": "13500",
+      "key_unit_price": "8000",
+      "full_soul_sale_price": "110000"
+    },
+    "arena_form": {
+      "name": "Captures Blop Royal",
+      "character_class": "cra",
+      "recorded_at_input": "2026-09-12 23:45",
+      "round_time": {
+        "hours": "00",
+        "minutes": "17",
+        "seconds": "00"
+      },
+      "seat_price": "30000",
+      "seats_sold": "6",
+      "capture_price": "95000",
+      "captures_count": "1"
+    },
+    "zone_edit": null,
+    "dungeon_edit": null,
+    "duo_trio_edit": null,
+    "arena_edit": null
+  }
+}
