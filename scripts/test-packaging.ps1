@@ -1,7 +1,13 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$nativeTarPath = (Get-Command tar.exe -CommandType Application).Source
+# Je garde le premier executable du PATH, meme si Windows et Git fournissent chacun tar.exe.
+function Resolve-NativeTarPath {
+    $nativeCommand = Get-Command tar.exe -CommandType Application | Select-Object -First 1
+    return $nativeCommand.Source
+}
+
+$nativeTarPath = Resolve-NativeTarPath
 $sourceScript = Join-Path $PSScriptRoot "build-release.ps1"
 $tempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $fixtureRoot = Join-Path $tempParent ("EvoFarm-packaging-tests-" + [guid]::NewGuid().ToString("N"))
@@ -173,6 +179,21 @@ function Invoke-PackagingCase {
 }
 
 try {
+    # Je reproduis les deux archiveurs du runner Windows sans modifier le PATH de la machine.
+    $selectedTarPath = & {
+        param([string]$FirstTarPath)
+        function Get-Command {
+            param([string]$Name, [string]$CommandType)
+            Assert-True ($Name -eq "tar.exe" -and $CommandType -eq "Application") "La resolution doit cibler les executables tar."
+            [pscustomobject]@{ Source = $FirstTarPath }
+            [pscustomobject]@{ Source = "C:\Program Files\Git\usr\bin\tar.exe" }
+        }
+        Resolve-NativeTarPath
+    } $nativeTarPath
+    Assert-True ($selectedTarPath -is [string] -and $selectedTarPath -ceq $nativeTarPath) "Plusieurs archiveurs : un seul chemin doit etre selectionne selon l'ordre du PATH."
+    & $selectedTarPath --version *> $null
+    Assert-True ($LASTEXITCODE -eq 0) "Plusieurs archiveurs : le chemin selectionne doit etre executable."
+    Write-Host "OK : multiple-native-tar-candidates"
     Invoke-PackagingCase -Name "compilation-error" -CargoExit 23 -ExpectedError "compilation d'EvoFarm a echoue"
     Invoke-PackagingCase -Name "archive-error" -TarExit 17 -ExpectedError "creation de l'archive a echoue"
     Invoke-PackagingCase -Name "missing-executable" -ProduceExe $false -ExpectedError "executable attendu"
@@ -193,7 +214,7 @@ try {
     Invoke-PackagingCase -Name "signature-verification-error" -SigningMode "complete" -VerifyExit 8 -ExpectedError "verification Authenticode a echoue"
     Invoke-PackagingCase -Name "signed-distribution" -SigningMode "complete"
     Invoke-PackagingCase -Name "Dofus Retro EvoFarm [Dev By Donj63000(Coca)]"
-    Write-Host "20 tests de packaging reussis."
+    Write-Host "21 tests de packaging reussis."
 }
 finally {
     foreach ($variable in $preservedEnvironment.Keys) {
