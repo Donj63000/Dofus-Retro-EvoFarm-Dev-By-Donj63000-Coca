@@ -58,10 +58,15 @@ class UnixPackagingTests(unittest.TestCase):
             binary.write_bytes(b"compiled " + target.encode("ascii"))
         elif command[0] == "lipo" and "-create" in command:
             Path(command[-1]).write_bytes(b"universal x86_64 arm64")
+        elif command[0] == "lipo":
+            self.assertEqual(command[2:], ["-verify_arch", "x86_64", "arm64"])
+            self.assertTrue(Path(command[1]).is_file())
         elif command[0] == "sips":
             Path(command[-1]).write_bytes(b"resized icon")
         elif command[0] == "iconutil":
-            Path(command[-1]).write_bytes(b"icns data")
+            self.assertEqual(command[:4], ["iconutil", "-c", "icns", "-o"])
+            self.assertTrue(Path(command[-1]).is_dir())
+            Path(command[4]).write_bytes(b"icns data")
         elif command[0] == "codesign" and "--sign" in command:
             signature = Path(command[-1]) / "Contents" / "_CodeSignature" / "CodeResources"
             signature.parent.mkdir()
@@ -125,7 +130,10 @@ class UnixPackagingTests(unittest.TestCase):
         self.assert_checksum(archive, checksum)
         cargo = [command for command, _ in self.commands if command[0] == "cargo"]
         self.assertEqual([command[-1] for command in cargo], list(packaging.MACOS_TARGETS))
-        self.assertIn(["lipo", "-verify_arch", "x86_64", "arm64"], [command[:-1] for command, _ in self.commands])
+        verify = [command for command, _ in self.commands if command[0] == "lipo" and "-verify_arch" in command]
+        self.assertEqual(len(verify), 1)
+        self.assertEqual(verify[0][2:], ["-verify_arch", "x86_64", "arm64"])
+        self.assertEqual(Path(verify[0][1]).name, "evofarm")
         sign = [command for command, _ in self.commands if command[0] == "codesign"]
         self.assertIn("--timestamp=none", sign[0])
         self.assertEqual(sign[1][:-1], ["codesign", "--verify", "--deep", "--strict", "--all-architectures"])

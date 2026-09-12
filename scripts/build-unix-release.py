@@ -185,7 +185,8 @@ def prepare_macos_bundle(project: Path, stage: Path, scratch: Path, version: str
     run_command(["lipo", "-create", *(str(binary) for binary in binaries), "-output", str(executable)], cwd=project, env=env)
     require_file(executable)
     executable.chmod(0o755)
-    run_command(["lipo", "-verify_arch", "x86_64", "arm64", str(executable)], cwd=project, env=env)
+    # Je place le fichier avant la liste d'architectures, qui consomme tous les arguments suivants.
+    run_command(["lipo", str(executable), "-verify_arch", "x86_64", "arm64"], cwd=project, env=env)
 
     iconset = scratch / "EvoFarm.iconset"
     iconset.mkdir()
@@ -197,7 +198,7 @@ def prepare_macos_bundle(project: Path, stage: Path, scratch: Path, version: str
                          str(project / "logo.png"), "--out", str(icon)], cwd=project, env=env)
             require_file(icon)
     app_icon = resources / "EvoFarm.icns"
-    run_command(["iconutil", "-c", "icns", str(iconset), "-o", str(app_icon)], cwd=project, env=env)
+    run_command(["iconutil", "-c", "icns", "-o", str(app_icon), str(iconset)], cwd=project, env=env)
     require_file(app_icon)
 
     metadata = {
