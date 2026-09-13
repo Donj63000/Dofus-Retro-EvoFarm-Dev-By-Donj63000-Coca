@@ -95,9 +95,28 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: ./scripts/build-release.ps1
-      - name: Verifier le lancement Windows du binaire distribue
+      - name: Verifier le lancement Windows depuis l'archive
         if: matrix.platform == 'windows'
-        run: python scripts/smoke-app.py --binary EvoFarm.exe
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          # Je fournis OpenGL au runner sans GPU, uniquement dans son dossier de test.
+          $smokeDir = Join-Path $env:RUNNER_TEMP "evofarm-smoke"
+          $mesaArchive = Join-Path $env:RUNNER_TEMP "mesa3d-26.2.0-release-msvc.7z"
+          Invoke-WebRequest -Uri "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.0/mesa3d-26.2.0-release-msvc.7z" -OutFile $mesaArchive
+          if ((Get-FileHash -LiteralPath $mesaArchive -Algorithm SHA256).Hash -ne "dcb2719ef346dab5b609fcb193a5f13cfc4b0502e3f4de1ad43d349477402f47") {
+            throw "L'empreinte de Mesa ne correspond pas a la version de test attendue."
+          }
+          Expand-Archive -LiteralPath EvoFarm-Windows-x64.zip -DestinationPath $smokeDir
+          & 7z.exe e $mesaArchive "x64/opengl32.dll" "x64/libgallium_wgl.dll" "-o$smokeDir" -y
+          if ($LASTEXITCODE -ne 0) { throw "L'extraction du rendu logiciel a echoue." }
+          foreach ($library in @("opengl32.dll", "libgallium_wgl.dll")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $smokeDir $library) -PathType Leaf)) {
+              throw "Bibliotheque de rendu logiciel absente : $library"
+            }
+          }
+          python scripts/smoke-app.py --binary (Join-Path $smokeDir "EvoFarm.exe")
       - name: Construire Linux
         if: matrix.platform == 'linux'
         run: python scripts/build-unix-release.py --platform linux

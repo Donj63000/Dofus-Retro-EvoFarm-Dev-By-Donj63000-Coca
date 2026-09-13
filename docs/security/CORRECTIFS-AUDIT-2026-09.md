@@ -83,6 +83,8 @@ Le patch fourni a été appliqué sans conflit : les 20 fichiers de l'index Git 
 
 Un test Windows supplémentaire crée une véritable jonction dans un dossier temporaire et vérifie le refus de lecture du point de réanalyse, de catalogage et d'écriture via ce dossier, sans modifier sa cible. Les tests Windows et Unix s'exécutent sur leurs systèmes respectifs dans la CI. Le binaire Windows distribué passe également le test de démarrage sur le runner temporaire, comme les binaires Linux et macOS.
 
+Le runner Windows sans GPU reçoit Mesa 26.2.0 dans le seul dossier temporaire du test, avec vérification de l'empreinte SHA-256 de l'archive téléchargée. Le test lance l'exécutable extrait du ZIP distribué avec le rendu logiciel `llvmpipe` ; ces bibliothèques de test ne sont pas ajoutées aux téléchargements publics.
+
 La réception locale sous Windows avec Rust 1.93.0 a validé rustfmt, Clippy sans avertissement, les tests Rust et Python, les 21 scénarios de packaging et cargo-audit. Les deux essais natifs `native_visual_review` et `native_demo_review` ont produit respectivement 45 et 12 captures ; les essais utilisent des états isolés du profil personnel. L'audit ne signale aucune vulnérabilité connue ; les quatre avertissements de maintenance restent présents.
 
 Les nombres de tests indiqués plus haut décrivent l'environnement de préparation du patch. Le dépôt a depuis reçu les contrôles du README vidéo ; le poste de développement contient aussi des tests de tournage locaux non inclus dans cette publication. Les résultats de la CI du tag `v0.3.1` font foi pour les sources distribuées. Le workflow de release vérifie les quatre cibles, les archives et les empreintes avant de publier les binaires et leurs attestations.
