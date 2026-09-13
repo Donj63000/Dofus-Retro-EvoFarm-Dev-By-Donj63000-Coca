@@ -1,72 +1,47 @@
-"""Je vérifie le lecteur du README et les fichiers vidéo livrés avec le dépôt."""
+"""Je vérifie l'intégration native de la vidéo dans le README et ses sous-titres."""
 
-from html.parser import HTMLParser
 from pathlib import Path
-import struct
+import re
 import unittest
-from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_PREFIX = "/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/"
-
-
-class VideoParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.videos = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "video":
-            self.videos.append(dict(attrs))
 
 
 class ReadmeVideoTests(unittest.TestCase):
-    def test_player_references_published_assets_and_requires_user_playback(self):
+    def test_video_uses_a_standalone_github_attachment_with_fallback_link(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        parser = VideoParser()
-        parser.feed(readme)
-        self.assertEqual(len(parser.videos), 1)
-        video = parser.videos[0]
-        self.assertIn("controls", video)
-        self.assertNotIn("autoplay", video)
-        source = urlsplit(video["src"])
-        self.assertEqual(source.scheme, "https")
-        self.assertEqual(source.netloc, "raw.githubusercontent.com")
-        self.assertTrue(source.path.startswith(RAW_PREFIX))
-        self.assertTrue((ROOT / source.path.removeprefix(RAW_PREFIX)).is_file())
-        self.assertTrue((ROOT / video["poster"]).is_file())
-        self.assertIn(f']({video["src"]})', readme)
+        # Je garde l'URL seule dans son paragraphe : GitHub la transforme en lecteur.
+        attachments = re.findall(
+            r"\n\n(https://github\.com/user-attachments/assets/[0-9a-f-]{36})\n\n",
+            readme,
+        )
+        self.assertEqual(len(attachments), 1)
+        self.assertIn(f"]({attachments[0]})", readme)
+        self.assertNotIn("<video", readme)
+        self.assertIn('href="#evofarm-en-vidéo"', readme)
+        self.assertLess(readme.index("## EvoFarm en vidéo"), readme.index("## Télécharger et commencer"))
 
-    def test_mp4_is_complete_and_ready_for_progressive_playback(self):
-        content = (ROOT / "docs/demo/videos/EvoFarm-demonstration-4min.mp4").read_bytes()
-        position, boxes = 0, {}
-        while position < len(content):
-            self.assertGreaterEqual(len(content) - position, 8)
-            size, kind = struct.unpack_from(">I4s", content, position)
-            self.assertGreaterEqual(size, 8)
-            self.assertLessEqual(position + size, len(content))
-            boxes[kind] = (position, content[position + 8:position + size])
-            position += size
-        self.assertIn(b"ftyp", boxes)
-        self.assertIn(b"moov", boxes)
-        self.assertIn(b"mdat", boxes)
-        # Je vérifie que les métadonnées précèdent les images pour démarrer sans tout télécharger.
-        self.assertLess(boxes[b"moov"][0], boxes[b"mdat"][0])
-        metadata = boxes[b"moov"][1]
-        self.assertIn(b"avc1", metadata)
-        self.assertIn(b"mp4a", metadata)
-        self.assertEqual(metadata[4:8], b"mvhd")
-        self.assertEqual(metadata[8], 0)
-        timescale, duration = struct.unpack_from(">II", metadata, 20)
-        self.assertGreater(timescale, 0)
-        self.assertAlmostEqual(duration / timescale, 240, delta=0.1)
-
-    def test_subtitles_cover_the_published_video(self):
-        subtitles = (ROOT / "docs/demo/videos/EvoFarm-demonstration-fr.srt").read_text(encoding="utf-8")
-        self.assertIn("00:00:00,000 -->", subtitles)
-        self.assertIn("--> 00:04:00,000", subtitles)
-        self.assertEqual(subtitles.count(" --> "), 24)
+    def test_subtitles_exist_and_cover_four_minutes_without_gaps(self):
+        relative = "docs/demo/videos/EvoFarm-demonstration-fr.srt"
+        self.assertIn(f"]({relative})", (ROOT / "README.md").read_text(encoding="utf-8"))
+        subtitles = (ROOT / relative).read_text(encoding="utf-8")
+        cues = subtitles.strip().split("\n\n")
+        end = 0
+        for number, cue in enumerate(cues, 1):
+            lines = cue.splitlines()
+            self.assertEqual(int(lines[0]), number)
+            timestamps = lines[1].split(" --> ")
+            self.assertEqual(len(timestamps), 2)
+            values = []
+            for timestamp in timestamps:
+                h, m, s, ms = map(int, re.split(r"[:,]", timestamp))
+                values.append(((h * 60 + m) * 60 + s) * 1000 + ms)
+            self.assertEqual(values[0], end)
+            self.assertGreater(values[1], values[0])
+            self.assertTrue("".join(lines[2:]).strip())
+            end = values[1]
+        self.assertEqual(end, 240_000)
 
 
 if __name__ == "__main__":

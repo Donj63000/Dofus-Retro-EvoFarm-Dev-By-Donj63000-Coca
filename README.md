@@ -36,9 +36,9 @@
 
 **Découvrez EvoFarm en 4 minutes** : bilans, saisie d'une session, recherche d'activité et sauvegardes, avec un point sur le fonctionnement local et les limites de sécurité.
 
-<video src="https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/videos/EvoFarm-demonstration-4min.mp4" controls width="960" preload="metadata" poster="docs/demo/video-apercu.png"></video>
+https://github.com/user-attachments/assets/030daba9-fac2-4277-8b7d-90173de4b67c
 
-[Ouvrir ou télécharger la vidéo](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/videos/EvoFarm-demonstration-4min.mp4) · [Sous-titres français](docs/demo/videos/EvoFarm-demonstration-fr.srt)
+[Ouvrir ou télécharger la vidéo](https://github.com/user-attachments/assets/030daba9-fac2-4277-8b7d-90173de4b67c) · [Sous-titres français](docs/demo/videos/EvoFarm-demonstration-fr.srt)
 
 *Démonstration scénarisée avec des données fictives · 1080p · Musique et sous-titres français intégrés, sans voix off. Les constats de sécurité présentés datent du 13 septembre 2026.*
 
