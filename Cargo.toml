@@ -28,7 +28,7 @@ image = { version = "0.25", default-features = false, features = ["png", "ico"] 
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 
 [target.'cfg(windows)'.dev-dependencies]
-winit = { version = "=0.29.15", default-features = false }
+winit = { version = "=0.30.13", default-features = false }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
