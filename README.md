@@ -19,13 +19,87 @@ EvoFarm transforme vos résultats de jeu en bilans clairs : enregistrez vos sess
 
 Son interface bleu nuit, cyan et argent réunit les portraits des douze classes, des formulaires lisibles et des graphiques. Le logo, le fond et les icônes sont intégrés au programme.
 
-![EvoFarm après un mois fictif : 60 sessions et courbes de progression par activité](docs/demo/images/01-bilan-mensuel.png)
-
 **Un mois avec EvoFarm : 60 sessions, 20 jours d'activité et trois classes.** Cette démonstration suit un joueur du 14 août au 12 septembre 2026 : zones, donjons, captures en duo/trio et PL arène. Les formulaires remplis, classements, filtres et sauvegardes montrent comment exploiter son historique au quotidien.
 
 Les données et prix sont **fictifs**. Les **11 107 000 kamas** affichés regroupent la valeur estimée des ressources des zones et les bénéfices après coûts des autres activités.
 
-**[Découvrir les 12 captures expliquées](docs/demo/README.md)** · **[Télécharger le mois fictif en JSON](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/mois-demo.json)** · **[Comment importer la démo](docs/demo/README.md#importer-la-demo)**
+**[Les explications détaillées de la démo](docs/demo/README.md)** · **[Télécharger le mois fictif en JSON](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/mois-demo.json)** · **[Comment importer la démo](docs/demo/README.md#importer-la-demo)**
+
+## EvoFarm en images
+
+Les **12 captures ci-dessous** montrent les principales situations du quotidien, avec le même historique fictif. Cliquez sur une image pour l'afficher en grand.
+
+### 1. Voir sa progression sur le mois
+
+Le bilan sur 30 jours réunit les 60 sessions, les indicateurs et les courbes cumulées des quatre activités. Le joueur voit comment ses sorties contribuent à son résultat mensuel.
+
+![EvoFarm après un mois fictif : 60 sessions et courbes de progression par activité](docs/demo/images/01-bilan-mensuel.png)
+
+### 2. Examiner sa dernière semaine
+
+Le filtre **7 jours** et le **Mode bâton** mettent en évidence les durées, les bonnes sessions et les pertes : ici, 12 sessions représentent 2 330 500 kamas de valeur suivie.
+
+![Bilan hebdomadaire : durées, gains et session déficitaire](docs/demo/images/02-bilan-hebdomadaire.png)
+
+### 3. Comparer ses activités et ses classes
+
+Les meilleures activités, les résultats par classe et les sessions récentes permettent de comprendre d'où viennent les gains et de retrouver les sorties qui les expliquent.
+
+![Détail des bilans : meilleures activités, classes et sessions récentes](docs/demo/images/03-activites-classes-historique.png)
+
+### 4. Choisir quoi farmer avec une heure disponible
+
+Le joueur sélectionne son **Crâ** et une durée de **01:00:00**. EvoFarm utilise son historique pour proposer des activités, leur durée moyenne et une estimation des gains.
+
+![Recherche d'activité pour un Crâ disposant d'une heure](docs/demo/images/04-recherche-activite.png)
+
+### 5. Enregistrer une session en zone
+
+La durée et la valeur estimée des ressources donnent immédiatement un rendement. Le formulaire rempli côtoie les 24 sessions de zones, classées par kamas par heure.
+
+![Zones : formulaire rempli, prévision immédiate et historique](docs/demo/images/05-zones.png)
+
+### 6. Connaître le bénéfice d'un donjon
+
+EvoFarm déduit le prix de la clef du gain brut : **183 000 kamas − 14 000 kamas = 169 000 kamas nets**. L'historique permet ensuite de comparer les runs enregistrés.
+
+![Donjons : coût de la clef, bénéfice net et classement des runs](docs/demo/images/06-donjons.png)
+
+### 7. Calculer un run en duo avec capture
+
+Le loot et la revente de la capture sont confrontés au coût des **deux clefs** et de la pierre. Ce Dragon Cochon donne une prévision de **245 500 kamas nets** pour le run.
+
+![Duo : loot, deux clefs, pierre de capture et bénéfice net](docs/demo/images/07-duo.png)
+
+### 8. Passer au trio
+
+Le mode **Trio** prend en compte trois clefs. La prévision du Blop Multicolore Royal atteint **254 000 kamas nets** ; les runs correspondants sont visibles dans l'historique filtré. Le résultat concerne le run entier, sans partage automatique entre joueurs.
+
+![Trio : trois clefs, prévision de rendement et historique filtré](docs/demo/images/08-trio.png)
+
+### 9. Suivre les recettes et les pertes du PL arène
+
+Les places vendues produisent les recettes, puis EvoFarm retire le coût des captures. La liste montre aussi une session à **−41 000 kamas**, conservée dans les bilans pour refléter les résultats réels de la saisie.
+
+![PL arène : places vendues, coût des captures et session déficitaire](docs/demo/images/09-pl-arene.png)
+
+### 10. Corriger une session existante
+
+Le bouton **Modifier** retrouve les champs de la session. Une correction de 278 000 à 293 000 kamas actualise aussitôt la prévision ; le joueur peut **Enregistrer** ou **Annuler**. Cette modification reste en cours dans la capture et ne change pas les totaux de la démo.
+
+![Modification d'une session : champs remplis, prévision et commandes de validation](docs/demo/images/10-modifier-session.png)
+
+### 11. Sauvegarder son historique et ses brouillons
+
+Une sauvegarde nommée conserve les **60 sessions et les quatre brouillons**. Le dialogue résume le contenu avant de garder cet état du mois.
+
+![Sauvegarde nommée : nom et résumé de l'historique avec ses brouillons](docs/demo/images/11-sauvegarder.png)
+
+### 12. Retrouver ses sauvegardes du mois
+
+La bibliothèque présente les instantanés de l'historique avec leur date et leur contenu. Le joueur peut **Charger**, **Renommer** ou **Supprimer** une sauvegarde. La galerie illustre quatre instantanés hebdomadaires ; le JSON téléchargeable contient l'état final.
+
+![Bibliothèque des sauvegardes : historique du mois et actions disponibles](docs/demo/images/12-charger.png)
 
 ## Télécharger et commencer
 
