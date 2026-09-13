@@ -3,6 +3,7 @@
 
 mod calculations;
 mod icon_asset;
+mod limits;
 mod models;
 mod reports;
 mod storage;
@@ -146,6 +147,7 @@ pub struct MyApp {
     pub report_period: ReportPeriod,
     pub report_categories: ReportCategoryFilter,
     pub report_bar_mode: bool,
+    pub report_cache: Option<reports::ReportCache>,
     pub activity_search_class: Option<DofusClass>,
     pub activity_search_time: DurationInput,
     pub activity_search_time_touched: bool,
@@ -201,6 +203,7 @@ impl Default for MyApp {
             report_period: ReportPeriod::AllTime,
             report_categories: ReportCategoryFilter::default(),
             report_bar_mode: false,
+            report_cache: None,
             activity_search_class: None,
             activity_search_time: DurationInput::default(),
             activity_search_time_touched: false,
@@ -383,7 +386,15 @@ impl MyApp {
     }
 
     pub fn open_named_load_dialog(&mut self) {
-        let save_directory = storage::named_saves_dir_path();
+        let save_directory = match storage::named_saves_dir_path() {
+            Ok(path) => path,
+            Err(error) => {
+                self.named_save_error = Some(error.clone());
+                self.named_saves_error = Some(error.clone());
+                self.set_status(StatusKind::Error, error);
+                return;
+            }
+        };
         let _ = self.refresh_named_saves_from_dir(&save_directory);
         self.show_named_load_dialog = true;
         self.show_named_save_dialog = false;
@@ -400,7 +411,7 @@ impl MyApp {
     }
 
     pub fn refresh_named_saves(&mut self) -> Result<(), String> {
-        let save_directory = storage::named_saves_dir_path();
+        let save_directory = storage::named_saves_dir_path()?;
         self.refresh_named_saves_from_dir(&save_directory)
     }
 
@@ -421,7 +432,15 @@ impl MyApp {
     }
 
     pub fn request_named_save(&mut self) {
-        let save_directory = storage::named_saves_dir_path();
+        let save_directory = match storage::named_saves_dir_path() {
+            Ok(path) => path,
+            Err(error) => {
+                self.named_save_error = Some(error.clone());
+                self.named_saves_error = Some(error.clone());
+                self.set_status(StatusKind::Error, error);
+                return;
+            }
+        };
         self.request_named_save_in_dir(&save_directory);
     }
 
@@ -503,7 +522,15 @@ impl MyApp {
     }
 
     pub fn save_named_save_rename(&mut self) {
-        let save_directory = storage::named_saves_dir_path();
+        let save_directory = match storage::named_saves_dir_path() {
+            Ok(path) => path,
+            Err(error) => {
+                self.named_save_error = Some(error.clone());
+                self.named_saves_error = Some(error.clone());
+                self.set_status(StatusKind::Error, error);
+                return;
+            }
+        };
 
         let Some(rename) = self.named_save_rename.as_ref() else {
             return;
@@ -576,7 +603,15 @@ impl MyApp {
         self.show_named_save_confirm = false;
 
         if let Some(action) = self.pending_named_save_confirm_action.take() {
-            let save_directory = storage::named_saves_dir_path();
+            let save_directory = match storage::named_saves_dir_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    self.named_save_error = Some(error.clone());
+                    self.named_saves_error = Some(error.clone());
+                    self.set_status(StatusKind::Error, error);
+                    return;
+                }
+            };
 
             match action {
                 NamedSaveConfirmAction::Load { save_id, .. } => {
@@ -595,11 +630,12 @@ impl MyApp {
     pub fn submit_zone_form(&mut self) {
         match build_zone_entry(&self.zone_form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 push_and_sort_by(&mut self.data.zones, entry, |zone| zone.kamas_per_hour);
                 self.zone_form = ZoneForm::default();
                 self.zone_form_error = None;
                 self.clear_zone_transient_state();
-                self.persist_with_status("Zone ajoutée.");
+                self.commit_current_state_or_restore(previous, "Zone ajoutée.");
             }
             Err(error) => self.zone_form_error = Some(error),
         }
@@ -608,13 +644,14 @@ impl MyApp {
     pub fn submit_dungeon_form(&mut self) {
         match build_dungeon_entry(&self.dungeon_form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 push_and_sort_by(&mut self.data.dungeons, entry, |dungeon| {
                     dungeon.kamas_per_hour
                 });
                 self.dungeon_form = DungeonForm::default();
                 self.dungeon_form_error = None;
                 self.clear_dungeon_transient_state();
-                self.persist_with_status("Donjon ajouté.");
+                self.commit_current_state_or_restore(previous, "Donjon ajouté.");
             }
             Err(error) => self.dungeon_form_error = Some(error),
         }
@@ -623,11 +660,12 @@ impl MyApp {
     pub fn submit_duo_trio_form(&mut self) {
         match build_duo_trio_entry(&self.duo_trio_form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 push_and_sort_by(&mut self.data.duo_trios, entry, |run| run.kamas_per_hour);
                 self.duo_trio_form = DuoTrioForm::default();
                 self.duo_trio_form_error = None;
                 self.clear_duo_trio_transient_state();
-                self.persist_with_status("Run duo/trio ajouté.");
+                self.commit_current_state_or_restore(previous, "Run duo/trio ajouté.");
             }
             Err(error) => self.duo_trio_form_error = Some(error),
         }
@@ -636,11 +674,12 @@ impl MyApp {
     pub fn submit_arena_form(&mut self) {
         match build_arena_entry(&self.arena_form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 push_and_sort_by(&mut self.data.arenas, entry, |arena| arena.kamas_per_hour);
                 self.arena_form = ArenaForm::default();
                 self.arena_form_error = None;
                 self.clear_arena_transient_state();
-                self.persist_with_status("PL arène ajouté.");
+                self.commit_current_state_or_restore(previous, "PL arène ajouté.");
             }
             Err(error) => self.arena_form_error = Some(error),
         }
@@ -697,14 +736,22 @@ impl MyApp {
 
         let index = edit.index;
         let form = edit.form.clone();
+        if index >= self.data.zones.len() {
+            if let Some(edit) = self.zone_edit.as_mut() {
+                edit.error =
+                    Some("La session d'origine n'existe plus. Modification refusée.".to_string());
+            }
+            return;
+        }
 
         match build_zone_entry(&form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 replace_and_sort_by(&mut self.data.zones, index, entry, |zone| {
                     zone.kamas_per_hour
                 });
                 self.clear_zone_transient_state();
-                self.persist_with_status("Zone mise à jour.");
+                self.commit_current_state_or_restore(previous, "Zone mise à jour.");
             }
             Err(error) => {
                 if let Some(edit) = self.zone_edit.as_mut() {
@@ -721,14 +768,22 @@ impl MyApp {
 
         let index = edit.index;
         let form = edit.form.clone();
+        if index >= self.data.dungeons.len() {
+            if let Some(edit) = self.dungeon_edit.as_mut() {
+                edit.error =
+                    Some("La session d'origine n'existe plus. Modification refusée.".to_string());
+            }
+            return;
+        }
 
         match build_dungeon_entry(&form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 replace_and_sort_by(&mut self.data.dungeons, index, entry, |dungeon| {
                     dungeon.kamas_per_hour
                 });
                 self.clear_dungeon_transient_state();
-                self.persist_with_status("Donjon mis à jour.");
+                self.commit_current_state_or_restore(previous, "Donjon mis à jour.");
             }
             Err(error) => {
                 if let Some(edit) = self.dungeon_edit.as_mut() {
@@ -745,14 +800,22 @@ impl MyApp {
 
         let index = edit.index;
         let form = edit.form.clone();
+        if index >= self.data.duo_trios.len() {
+            if let Some(edit) = self.duo_trio_edit.as_mut() {
+                edit.error =
+                    Some("La session d'origine n'existe plus. Modification refusée.".to_string());
+            }
+            return;
+        }
 
         match build_duo_trio_entry(&form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 replace_and_sort_by(&mut self.data.duo_trios, index, entry, |run| {
                     run.kamas_per_hour
                 });
                 self.clear_duo_trio_transient_state();
-                self.persist_with_status("Run duo/trio mis à jour.");
+                self.commit_current_state_or_restore(previous, "Run duo/trio mis à jour.");
             }
             Err(error) => {
                 if let Some(edit) = self.duo_trio_edit.as_mut() {
@@ -769,14 +832,22 @@ impl MyApp {
 
         let index = edit.index;
         let form = edit.form.clone();
+        if index >= self.data.arenas.len() {
+            if let Some(edit) = self.arena_edit.as_mut() {
+                edit.error =
+                    Some("La session d'origine n'existe plus. Modification refusée.".to_string());
+            }
+            return;
+        }
 
         match build_arena_entry(&form) {
             Ok(entry) => {
+                let previous = self.build_persisted_state();
                 replace_and_sort_by(&mut self.data.arenas, index, entry, |arena| {
                     arena.kamas_per_hour
                 });
                 self.clear_arena_transient_state();
-                self.persist_with_status("PL arène mis à jour.");
+                self.commit_current_state_or_restore(previous, "PL arène mis à jour.");
             }
             Err(error) => {
                 if let Some(edit) = self.arena_edit.as_mut() {
@@ -804,33 +875,37 @@ impl MyApp {
 
     pub fn confirm_zone_delete(&mut self, index: usize) {
         if index < self.data.zones.len() {
+            let previous = self.build_persisted_state();
             self.data.zones.remove(index);
             self.clear_zone_transient_state();
-            self.persist_with_status("Zone supprimée.");
+            self.commit_current_state_or_restore(previous, "Zone supprimée.");
         }
     }
 
     pub fn confirm_dungeon_delete(&mut self, index: usize) {
         if index < self.data.dungeons.len() {
+            let previous = self.build_persisted_state();
             self.data.dungeons.remove(index);
             self.clear_dungeon_transient_state();
-            self.persist_with_status("Donjon supprimé.");
+            self.commit_current_state_or_restore(previous, "Donjon supprimé.");
         }
     }
 
     pub fn confirm_duo_trio_delete(&mut self, index: usize) {
         if index < self.data.duo_trios.len() {
+            let previous = self.build_persisted_state();
             self.data.duo_trios.remove(index);
             self.clear_duo_trio_transient_state();
-            self.persist_with_status("Run duo/trio supprimé.");
+            self.commit_current_state_or_restore(previous, "Run duo/trio supprimé.");
         }
     }
 
     pub fn confirm_arena_delete(&mut self, index: usize) {
         if index < self.data.arenas.len() {
+            let previous = self.build_persisted_state();
             self.data.arenas.remove(index);
             self.clear_arena_transient_state();
-            self.persist_with_status("PL arène supprimé.");
+            self.commit_current_state_or_restore(previous, "PL arène supprimé.");
         }
     }
 
@@ -864,10 +939,10 @@ impl MyApp {
     fn load_from_action(&mut self, action: LoadAction) {
         match action {
             LoadAction::ReloadLocal => self.reload_local_data(),
-            LoadAction::ImportExternal(path) => {
-                let local_path = storage::data_file_path();
-                self.import_from_path_to_save_path(&path, &local_path);
-            }
+            LoadAction::ImportExternal(path) => match storage::data_file_path() {
+                Ok(local_path) => self.import_from_path_to_save_path(&path, &local_path),
+                Err(error) => self.set_status(StatusKind::Error, error),
+            },
         }
     }
 
@@ -917,6 +992,7 @@ impl MyApp {
     }
 
     fn apply_persisted_state(&mut self, state: PersistedState) {
+        self.report_cache = None;
         let PersistedState { data, drafts, .. } = state;
         let DraftState {
             zone_form,
@@ -1219,27 +1295,71 @@ impl MyApp {
         self.status = None;
     }
 
-    fn persist_with_status(&mut self, success_message: &str) {
-        let path = storage::data_file_path();
-        self.persist_with_status_to_path(success_message, &path);
-    }
-
-    fn persist_with_status_to_path(&mut self, success_message: &str, path: &Path) {
-        let state = self.build_persisted_state();
-
-        match storage::save_state_to_path(&state, path) {
-            Ok(result) => self.set_status(
-                StatusKind::Success,
-                format!(
-                    "{success_message} {} Fichier : {}",
-                    persisted_state_summary(&state),
-                    result.path.display()
-                ),
-            ),
+    fn persist_with_status(&mut self, success_message: &str) -> bool {
+        match storage::data_file_path() {
+            Ok(path) => self.persist_with_status_to_path(success_message, &path),
             Err(error) => {
-                self.set_status(StatusKind::Error, format!("Erreur de sauvegarde : {error}"))
+                self.set_status(StatusKind::Error, error);
+                false
             }
         }
+    }
+
+    fn persist_with_status_to_path(&mut self, success_message: &str, path: &Path) -> bool {
+        let state = self.build_persisted_state();
+        match storage::save_state_to_path(&state, path) {
+            Ok(result) => {
+                self.set_status(
+                    StatusKind::Success,
+                    format!(
+                        "{success_message} {} Fichier : {}",
+                        persisted_state_summary(&state),
+                        result.path.display()
+                    ),
+                );
+                true
+            }
+            Err(error) => {
+                self.set_status(StatusKind::Error, format!("Erreur de sauvegarde : {error}"));
+                false
+            }
+        }
+    }
+
+    /// Une erreur d'écriture ou de quota ne doit ni effacer la saisie ni laisser
+    /// l'interface annoncer une modification absente de la sauvegarde sur disque.
+    fn commit_current_state_or_restore(&mut self, previous: PersistedState, message: &str) {
+        match storage::data_file_path() {
+            Ok(path) => {
+                self.commit_current_state_or_restore_to_path(previous, message, &path);
+            }
+            Err(error) => {
+                self.set_status(StatusKind::Error, error);
+                self.restore_failed_mutation(previous);
+            }
+        }
+    }
+
+    fn commit_current_state_or_restore_to_path(
+        &mut self,
+        previous: PersistedState,
+        message: &str,
+        path: &Path,
+    ) -> bool {
+        if self.persist_with_status_to_path(message, path) {
+            true
+        } else {
+            self.restore_failed_mutation(previous);
+            false
+        }
+    }
+
+    fn restore_failed_mutation(&mut self, previous: PersistedState) {
+        let status = self.status.take();
+        let tab = self.current_tab;
+        self.apply_persisted_state(previous);
+        self.current_tab = tab;
+        self.status = status;
     }
 
     fn clear_zone_transient_state(&mut self) {
@@ -2642,3 +2762,7 @@ mod tests {
         assert_eq!(runs[0].kamas_per_hour, 480_000.0);
     }
 }
+
+#[cfg(test)]
+#[path = "security_tests/main.rs"]
+mod security_regressions;

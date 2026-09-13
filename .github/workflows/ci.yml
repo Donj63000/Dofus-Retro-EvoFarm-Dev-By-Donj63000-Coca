@@ -79,7 +79,18 @@ jobs:
         run: cargo install cargo-audit --version 0.22.1 --locked
       - name: Audit des dependances de toutes les cibles
         if: matrix.platform == 'windows'
-        run: cargo audit
+        shell: bash
+        run: cargo audit --json > cargo-audit.json
+      - name: Conserver les constats de dependances
+        if: always() && matrix.platform == 'windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-audit-windows
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            cargo-audit.json
+            Cargo.lock
       - name: Construire Windows
         if: matrix.platform == 'windows'
         shell: pwsh

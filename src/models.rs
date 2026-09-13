@@ -137,7 +137,7 @@ impl DofusClass {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct ZoneEntry {
     pub name: String,
     #[serde(default)]
@@ -149,7 +149,7 @@ pub struct ZoneEntry {
     pub kamas_per_hour: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct DungeonEntry {
     pub name: String,
     #[serde(default)]
@@ -163,7 +163,7 @@ pub struct DungeonEntry {
     pub kamas_per_hour: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct DuoTrioEntry {
     pub name: String,
     #[serde(default)]
@@ -184,7 +184,7 @@ pub struct DuoTrioEntry {
     pub kamas_per_hour: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct ArenaEntry {
     pub name: String,
     #[serde(default)]
@@ -202,7 +202,7 @@ pub struct ArenaEntry {
     pub kamas_per_hour: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 #[serde(default)]
 pub struct AppData {
     pub zones: Vec<ZoneEntry>,

@@ -1,0 +1,43 @@
+name: Dependency security watch
+
+on:
+  schedule:
+    - cron: "20 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/security.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.93.0"
+      - name: Installer l'auditeur epingle
+        run: cargo install cargo-audit --version 0.22.1 --locked
+      - name: Confronter le verrou complet a RustSec
+        # Ne pas filtrer les cibles et ne pas masquer le code de sortie.
+        run: cargo audit --json > cargo-audit.json
+      - name: Conserver le rapport meme en cas d'alerte
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-security-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            cargo-audit.json
+            Cargo.lock

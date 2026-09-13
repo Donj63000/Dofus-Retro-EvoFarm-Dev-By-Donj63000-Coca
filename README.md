@@ -49,7 +49,9 @@ https://github.com/user-attachments/assets/030daba9-fac2-4277-8b7d-90173de4b67c
 
 ## Fonctionnement, fiabilité et sécurité
 
-**Vous gardez la main sur vos données et vos décisions.** Voici ce que fait EvoFarm **0.3.0**, comment ses résultats sont calculés et quels contrôles vous pouvez vérifier avant de l'utiliser.
+**Vous gardez la main sur vos données et vos décisions.** Voici ce que fait EvoFarm **0.3.1**, comment ses résultats sont calculés et quels contrôles vous pouvez vérifier avant de l'utiliser.
+
+La [version 0.3.1](docs/releases/v0.3.1.md) intègre les correctifs de l'audit : limites de saisie et d'import, protection des sauvegardes et graphiques bornés pour les gros historiques. Le [détail technique](docs/security/CORRECTIFS-AUDIT-2026-09.md) précise les protections et leurs limites. Le format JSON reste en version 2 ; des données hors des nouvelles limites sont refusées explicitement.
 
 <details>
 <summary><strong>1. Comment fonctionne le logiciel, et quels éléments permettent de vérifier sa sécurité ?</strong></summary>

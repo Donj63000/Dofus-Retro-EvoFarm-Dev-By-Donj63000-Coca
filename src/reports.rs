@@ -2,10 +2,12 @@ use crate::calculations::{
     arena_kamas_per_hour, dungeon_kamas_per_hour, duo_trio_kamas_per_hour,
     normalize_text_for_matching, zone_kamas_per_hour,
 };
+use crate::limits::{AGGREGATED_BAR_BUCKETS, MAX_BAR_SEGMENTS, MAX_EXACT_BAR_SESSIONS};
 use crate::models::{AppData, DofusClass};
 use chrono::{Duration, Local, NaiveDateTime};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ActivityKind {
@@ -59,9 +61,18 @@ impl ReportPeriod {
 
     pub fn start_at(self, now: NaiveDateTime) -> Option<NaiveDateTime> {
         match self {
-            Self::Last24Hours => Some(now - Duration::hours(24)),
-            Self::Last7Days => Some(now - Duration::days(7)),
-            Self::Last30Days => Some(now - Duration::days(30)),
+            Self::Last24Hours => Some(
+                now.checked_sub_signed(Duration::hours(24))
+                    .unwrap_or(NaiveDateTime::MIN),
+            ),
+            Self::Last7Days => Some(
+                now.checked_sub_signed(Duration::days(7))
+                    .unwrap_or(NaiveDateTime::MIN),
+            ),
+            Self::Last30Days => Some(
+                now.checked_sub_signed(Duration::days(30))
+                    .unwrap_or(NaiveDateTime::MIN),
+            ),
             Self::AllTime => None,
         }
     }
@@ -211,7 +222,7 @@ pub struct SessionBarSegment {
     pub kamas_per_hour: f32,
     pub base_offset: f32,
     pub stack_total_value: f32,
-    pub simultaneous_sessions: Vec<ChartSessionDetail>,
+    pub simultaneous_sessions: Arc<[ChartSessionDetail]>,
 }
 
 #[derive(Debug, Clone)]
@@ -251,18 +262,80 @@ pub struct ReportSummary {
     pub recent_sessions: Vec<ReportSession>,
     pub chart_series: Vec<CategorySeries>,
     pub chart_bars: Vec<CategoryBarSeries>,
+    pub bar_chart_aggregated: bool,
     pub period_started_at: Option<NaiveDateTime>,
+}
+
+/// Le cache contient une copie de l'état borné. La comparaison évite qu'une future
+/// mutation oublie d'invalider un compteur de révision. Aucune liste de barres n'est
+/// construite lorsque l'utilisateur consulte seulement les courbes.
+pub struct ReportCache {
+    data: AppData,
+    period: ReportPeriod,
+    categories: ReportCategoryFilter,
+    second: i64,
+    include_bars: bool,
+    summary: Arc<ReportSummary>,
+}
+
+pub fn cached_report_summary(
+    cache: &mut Option<ReportCache>,
+    data: &AppData,
+    period: ReportPeriod,
+    categories: ReportCategoryFilter,
+    now: NaiveDateTime,
+    include_bars: bool,
+) -> Arc<ReportSummary> {
+    let second = now.and_utc().timestamp();
+    if let Some(current) = cache.as_ref() {
+        if current.period == period
+            && current.categories == categories
+            && current.second == second
+            && current.include_bars == include_bars
+            && &current.data == data
+        {
+            return Arc::clone(&current.summary);
+        }
+    }
+    let summary = Arc::new(build_report_summary_for_view(
+        data,
+        period,
+        categories,
+        now,
+        include_bars,
+    ));
+    *cache = Some(ReportCache {
+        data: data.clone(),
+        period,
+        categories,
+        second,
+        include_bars,
+        summary: Arc::clone(&summary),
+    });
+    summary
 }
 
 pub fn local_now() -> NaiveDateTime {
     Local::now().naive_local()
 }
 
+/// Point d'entrée complet conservé pour les tests et les consommateurs internes.
+#[allow(dead_code)]
 pub fn build_report_summary(
     data: &AppData,
     period: ReportPeriod,
     categories: ReportCategoryFilter,
     now: NaiveDateTime,
+) -> ReportSummary {
+    build_report_summary_for_view(data, period, categories, now, true)
+}
+
+fn build_report_summary_for_view(
+    data: &AppData,
+    period: ReportPeriod,
+    categories: ReportCategoryFilter,
+    now: NaiveDateTime,
+    include_bars: bool,
 ) -> ReportSummary {
     let all_sessions = collect_sessions(data);
     let filtered_sessions: Vec<ReportSession> = all_sessions
@@ -294,6 +367,12 @@ pub fn build_report_summary(
     recent_sessions.sort_by(compare_recent_sessions);
     recent_sessions.truncate(12);
 
+    let (chart_bars, bar_chart_aggregated) = if include_bars {
+        build_category_bar_series(&filtered_sessions, categories)
+    } else {
+        (Vec::new(), false)
+    };
+
     ReportSummary {
         session_count,
         total_earned,
@@ -304,7 +383,8 @@ pub fn build_report_summary(
         class_summaries,
         recent_sessions,
         chart_series: build_category_series(&filtered_sessions, categories),
-        chart_bars: build_category_bar_series(&filtered_sessions, categories),
+        chart_bars,
+        bar_chart_aggregated,
         period_started_at: period.start_at(now),
     }
 }
@@ -721,95 +801,104 @@ struct RenderableBarSession<'a> {
 fn build_category_bar_series(
     sessions: &[ReportSession],
     categories: ReportCategoryFilter,
-) -> Vec<CategoryBarSeries> {
-    let renderable_sessions = sessions
+) -> (Vec<CategoryBarSeries>, bool) {
+    let mut renderable = sessions
         .iter()
         .enumerate()
         .filter_map(|(source_index, session)| {
             let start_at = session.recorded_at?;
-            let duration_seconds = session.duration_seconds.round() as i64;
-
-            if duration_seconds <= 0 || session.accounting_value.abs() <= f32::EPSILON {
+            if !categories.is_selected(session.kind)
+                || crate::calculations::validate_session_interval(
+                    Some(start_at),
+                    session.duration_seconds,
+                )
+                .is_err()
+                || !session.accounting_value.is_finite()
+                || !session.kamas_per_hour.is_finite()
+                || session.accounting_value.abs() > crate::limits::MAX_CALCULATED_VALUE
+                || session.accounting_value.abs() <= f32::EPSILON
+            {
                 return None;
             }
-
+            let end_at = Duration::try_seconds(session.duration_seconds.round() as i64)
+                .and_then(|duration| start_at.checked_add_signed(duration))?;
             Some(RenderableBarSession {
                 source_index,
                 session,
                 start_at,
-                end_at: start_at + Duration::seconds(duration_seconds),
+                end_at,
             })
         })
         .collect::<Vec<_>>();
+    renderable.sort_by(compare_renderable_bar_sessions_for_stack);
+    if renderable.len() > MAX_EXACT_BAR_SESSIONS {
+        return (build_aggregated_bar_series(&renderable, categories), true);
+    }
 
-    let mut boundaries = renderable_sessions
-        .iter()
-        .flat_map(|session| [session.start_at, session.end_at])
-        .collect::<Vec<_>>();
-    boundaries.sort_unstable();
-    boundaries.dedup();
-
+    // Balayage des débuts/fins : pas de nouvelle recherche O(n) à chaque borne.
+    let mut events: BTreeMap<NaiveDateTime, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
+    for (index, session) in renderable.iter().enumerate() {
+        events.entry(session.start_at).or_default().0.push(index);
+        events.entry(session.end_at).or_default().1.push(index);
+    }
+    let timeline = events.into_iter().collect::<Vec<_>>();
+    let mut active = BTreeSet::new();
     let mut segments_by_kind: HashMap<ActivityKind, Vec<SessionBarSegment>> = HashMap::new();
-
-    for window in boundaries.windows(2) {
-        let segment_start_at = window[0];
-        let segment_end_at = window[1];
-
-        if segment_end_at <= segment_start_at {
+    let mut segment_count = 0usize;
+    for window in timeline.windows(2) {
+        let segment_start_at = window[0].0;
+        let segment_end_at = window[1].0;
+        let (starts, ends) = &window[0].1;
+        // Intervalles semi-ouverts : une session qui finit ici n'est plus active.
+        for index in ends {
+            active.remove(index);
+        }
+        for index in starts {
+            active.insert(*index);
+        }
+        if active.is_empty() {
             continue;
         }
-
-        let mut active_sessions = renderable_sessions
-            .iter()
-            .copied()
-            .filter(|session| {
-                session.start_at <= segment_start_at && session.end_at > segment_start_at
-            })
-            .collect::<Vec<_>>();
-
-        if active_sessions.is_empty() {
-            continue;
+        if segment_count + active.len() > MAX_BAR_SEGMENTS {
+            return (build_aggregated_bar_series(&renderable, categories), true);
         }
+        segment_count += active.len();
 
-        active_sessions.sort_by(compare_renderable_bar_sessions_for_stack);
-
-        let simultaneous_sessions = active_sessions
+        // Une seule liste par intervalle, partagée par Arc : aucune duplication cubique.
+        let details: Arc<[ChartSessionDetail]> = active
             .iter()
-            .map(|session| ChartSessionDetail {
-                kind: session.session.kind,
-                name: session.session.name.clone(),
-                duration_seconds: session.session.duration_seconds,
-                delta_value: session.session.accounting_value,
-                kamas_per_hour: session.session.kamas_per_hour,
+            .map(|index| {
+                let session = renderable[*index].session;
+                ChartSessionDetail {
+                    kind: session.kind,
+                    name: session.name.clone(),
+                    duration_seconds: session.duration_seconds,
+                    delta_value: session.accounting_value,
+                    kamas_per_hour: session.kamas_per_hour,
+                }
             })
-            .collect::<Vec<_>>();
-        let stacked_positive_total = active_sessions
+            .collect::<Vec<_>>()
+            .into();
+        let positive_total = active
             .iter()
-            .filter(|session| session.session.accounting_value > 0.0)
-            .map(|session| session.session.accounting_value)
-            .sum::<f32>();
-        let stacked_negative_total = active_sessions
+            .map(|index| renderable[*index].session.accounting_value.max(0.0))
+            .sum();
+        let negative_total = active
             .iter()
-            .filter(|session| session.session.accounting_value < 0.0)
-            .map(|session| session.session.accounting_value)
-            .sum::<f32>();
-        let mut positive_base = 0.0f32;
-        let mut negative_base = 0.0f32;
-
-        for session in active_sessions {
+            .map(|index| renderable[*index].session.accounting_value.min(0.0))
+            .sum();
+        let mut positive_base = 0.0;
+        let mut negative_base = 0.0;
+        for index in &active {
+            let session = &renderable[*index];
             let value = session.session.accounting_value;
-            let base_offset = if value.is_sign_positive() {
-                let base = positive_base;
-                positive_base += value;
-                base
-            } else if value.is_sign_negative() {
-                let base = negative_base;
-                negative_base += value;
-                base
+            let base = if value > 0.0 {
+                &mut positive_base
             } else {
-                0.0
+                &mut negative_base
             };
-
+            let base_offset = *base;
+            *base += value;
             segments_by_kind
                 .entry(session.session.kind)
                 .or_default()
@@ -824,26 +913,155 @@ fn build_category_bar_series(
                     value,
                     kamas_per_hour: session.session.kamas_per_hour,
                     base_offset,
-                    stack_total_value: if value.is_sign_negative() {
-                        stacked_negative_total
+                    stack_total_value: if value > 0.0 {
+                        positive_total
                     } else {
-                        stacked_positive_total
+                        negative_total
                     },
-                    simultaneous_sessions: simultaneous_sessions.clone(),
+                    simultaneous_sessions: Arc::clone(&details),
                 });
         }
     }
+    (
+        categories
+            .selected_kinds()
+            .into_iter()
+            .map(|kind| CategoryBarSeries {
+                kind,
+                segments: segments_by_kind.remove(&kind).unwrap_or_default(),
+            })
+            .collect(),
+        false,
+    )
+}
 
-    let mut series = Vec::new();
-
-    for kind in categories.selected_kinds() {
-        series.push(CategoryBarSeries {
-            kind,
-            segments: segments_by_kind.remove(&kind).unwrap_or_default(),
+/// Repli borné, sans perte des totaux : le gain de chaque session est réparti au
+/// prorata du temps couvert par chaque créneau. Les créneaux intérieurs sont
+/// ajoutés par différences ; coût O(n + 8*b), mémoire O(8*b), b <= 256.
+fn build_aggregated_bar_series(
+    sessions: &[RenderableBarSession<'_>],
+    categories: ReportCategoryFilter,
+) -> Vec<CategoryBarSeries> {
+    let mut by_kind: HashMap<ActivityKind, Vec<SessionBarSegment>> = HashMap::new();
+    let bounds = sessions
+        .iter()
+        .map(|session| (session.start_at, session.end_at))
+        .reduce(|(start, end), (other_start, other_end)| {
+            (start.min(other_start), end.max(other_end))
         });
+    if let Some((origin, end)) = bounds {
+        let span = (end - origin).num_seconds().max(1);
+        let width = (span + AGGREGATED_BAR_BUCKETS as i64 - 1) / AGGREGATED_BAR_BUCKETS as i64;
+        let count = ((span + width - 1) / width) as usize;
+        let mut partial: [Vec<f64>; 8] = std::array::from_fn(|_| vec![0.0; count]);
+        let mut differences: [Vec<f64>; 8] = std::array::from_fn(|_| vec![0.0; count + 1]);
+        let mut session_differences: [Vec<i64>; 8] = std::array::from_fn(|_| vec![0; count + 1]);
+        for session in sessions {
+            let kind_index = match session.session.kind {
+                ActivityKind::Zone => 0,
+                ActivityKind::Dungeon => 1,
+                ActivityKind::DuoTrio => 2,
+                ActivityKind::Arena => 3,
+            };
+            let channel = kind_index * 2 + usize::from(session.session.accounting_value < 0.0);
+            let start = (session.start_at - origin).num_seconds();
+            let finish = (session.end_at - origin).num_seconds();
+            let first = (start / width) as usize;
+            let last = ((finish - 1) / width) as usize;
+            let value = f64::from(session.session.accounting_value);
+            session_differences[channel][first] += 1;
+            session_differences[channel][last + 1] -= 1;
+            if first == last {
+                partial[channel][first] += value;
+            } else {
+                let rate = value / (finish - start) as f64;
+                partial[channel][first] += rate * ((first as i64 + 1) * width - start) as f64;
+                partial[channel][last] += rate * (finish - last as i64 * width) as f64;
+                differences[channel][first + 1] += rate * width as f64;
+                differences[channel][last] -= rate * width as f64;
+            }
+        }
+        let mut running = [0.0f64; 8];
+        let mut active_count = [0i64; 8];
+        for bucket in 0..count {
+            let mut values = [0.0f64; 8];
+            for channel in 0..8 {
+                running[channel] += differences[channel][bucket];
+                active_count[channel] += session_differences[channel][bucket];
+                if active_count[channel] > 0 {
+                    let value = partial[channel][bucket] + running[channel];
+                    values[channel] = if channel % 2 == 0 {
+                        value.max(0.0)
+                    } else {
+                        value.min(0.0)
+                    };
+                }
+            }
+            let Some(start_at) = Duration::try_seconds(bucket as i64 * width)
+                .and_then(|duration| origin.checked_add_signed(duration))
+            else {
+                continue;
+            };
+            let Some(end_at) = Duration::try_seconds(((bucket as i64 + 1) * width).min(span))
+                .and_then(|duration| origin.checked_add_signed(duration))
+            else {
+                continue;
+            };
+            let duration_seconds = (end_at - start_at).num_seconds() as f32;
+            let positive_total = values.iter().step_by(2).sum::<f64>();
+            let negative_total = values.iter().skip(1).step_by(2).sum::<f64>();
+            let mut positive_base = 0.0f64;
+            let mut negative_base = 0.0f64;
+            for (kind_index, kind) in ActivityKind::all().into_iter().enumerate() {
+                if !categories.is_selected(kind) {
+                    continue;
+                }
+                for sign in 0..2 {
+                    let channel = kind_index * 2 + sign;
+                    let value = values[channel];
+                    if value.abs() <= f64::from(f32::EPSILON) {
+                        continue;
+                    }
+                    let base = if sign == 0 {
+                        &mut positive_base
+                    } else {
+                        &mut negative_base
+                    };
+                    let base_offset = *base;
+                    *base += value;
+                    by_kind.entry(kind).or_default().push(SessionBarSegment {
+                        kind,
+                        name: format!(
+                            "Gains agrégés — {} session(s) sur ce créneau",
+                            active_count[channel]
+                        ),
+                        session_start_at: start_at,
+                        session_end_at: end_at,
+                        segment_start_at: start_at,
+                        segment_end_at: end_at,
+                        session_duration_seconds: duration_seconds,
+                        value: value as f32,
+                        kamas_per_hour: (value * 3600.0 / f64::from(duration_seconds)) as f32,
+                        base_offset: base_offset as f32,
+                        stack_total_value: if sign == 0 {
+                            positive_total as f32
+                        } else {
+                            negative_total as f32
+                        },
+                        simultaneous_sessions: Vec::new().into(),
+                    });
+                }
+            }
+        }
     }
-
-    series
+    categories
+        .selected_kinds()
+        .into_iter()
+        .map(|kind| CategoryBarSeries {
+            kind,
+            segments: by_kind.remove(&kind).unwrap_or_default(),
+        })
+        .collect()
 }
 
 fn compare_renderable_bar_sessions_for_stack(
@@ -1929,3 +2147,7 @@ mod tests {
         assert_eq!(cra.best, -100_000.0);
     }
 }
+
+#[cfg(test)]
+#[path = "security_tests/reports.rs"]
+mod security_regressions;

@@ -2,18 +2,25 @@ use crate::calculations::{
     sanitize_arena_entry, sanitize_dungeon_entry, sanitize_duo_trio_entry, sanitize_zone_entry,
 };
 use crate::models::{
-    AppData, ArenaEntry, DraftState, DungeonEntry, DuoTrioEntry, PersistedState, ZoneEntry,
-    PERSISTED_STATE_VERSION,
+    AppData, ArenaEntry, DraftState, DungeonEntry, DuoTrioEntry, PersistedInlineEdit,
+    PersistedState, ZoneEntry, PERSISTED_STATE_VERSION,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::fs::{self, OpenOptions};
-use std::io::{BufReader, ErrorKind, Read, Write};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, BufReader, ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAX_STATE_FILE_BYTES: u64 = 8 * 1024 * 1024;
+use crate::limits::{
+    MAX_DRAFT_FIELD_BYTES, MAX_NAMED_SAVES, MAX_NAME_BYTES, MAX_SAVE_DIRECTORY_ENTRIES,
+    MAX_SAVE_LIST_BYTES, MAX_STATE_FILE_BYTES, MAX_TOTAL_ENTRIES,
+};
+use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
+static FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(test)]
 pub struct LoadDataResult {
@@ -86,17 +93,17 @@ struct LoadNamedSaveEnvelopeResult {
     pub cleaned_legacy_entries: usize,
 }
 
-pub fn data_file_path() -> PathBuf {
-    local_data_paths()[0].clone()
+pub fn data_file_path() -> Result<PathBuf, String> {
+    Ok(local_data_paths()?[0].clone())
 }
 
 #[allow(dead_code)]
-pub fn named_saves_dir_path() -> PathBuf {
+pub fn named_saves_dir_path() -> Result<PathBuf, String> {
     preferred_named_saves_dir_path()
 }
 
 pub fn has_local_state() -> bool {
-    has_state_at_paths(&local_data_paths())
+    local_data_paths().is_ok_and(|paths| has_state_at_paths(&paths))
 }
 
 #[cfg(test)]
@@ -121,7 +128,7 @@ pub fn save_data_to_path(data: &AppData, path: &Path) -> Result<PathBuf, String>
 }
 
 pub fn load_state() -> Result<LoadStateResult, String> {
-    load_state_from_paths(&local_data_paths())
+    load_state_from_paths(&local_data_paths()?)
 }
 
 pub fn load_state_from_path(path: &Path) -> Result<LoadStateResult, String> {
@@ -156,17 +163,17 @@ pub fn load_state_from_path(path: &Path) -> Result<LoadStateResult, String> {
 
 #[allow(dead_code)]
 pub fn list_named_saves() -> Result<Vec<NamedSaveSummary>, String> {
-    list_named_saves_in_dir(&named_saves_dir_path())
+    list_named_saves_in_dir(&named_saves_dir_path()?)
 }
 
 #[allow(dead_code)]
 pub fn find_named_save_by_name(display_name: &str) -> Result<Option<NamedSaveSummary>, String> {
-    find_named_save_by_name_in_dir(display_name, &named_saves_dir_path())
+    find_named_save_by_name_in_dir(display_name, &named_saves_dir_path()?)
 }
 
 #[allow(dead_code)]
 pub fn load_named_save(save_id: &str) -> Result<LoadNamedSaveResult, String> {
-    load_named_save_in_dir(save_id, &named_saves_dir_path())
+    load_named_save_in_dir(save_id, &named_saves_dir_path()?)
 }
 
 #[allow(dead_code)]
@@ -179,22 +186,22 @@ pub fn save_named_state(
         display_name,
         state,
         overwrite_save_id,
-        &named_saves_dir_path(),
+        &named_saves_dir_path()?,
     )
 }
 
 #[allow(dead_code)]
 pub fn rename_named_save(save_id: &str, new_name: &str) -> Result<NamedSaveMeta, String> {
-    rename_named_save_in_dir(save_id, new_name, &named_saves_dir_path())
+    rename_named_save_in_dir(save_id, new_name, &named_saves_dir_path()?)
 }
 
 #[allow(dead_code)]
 pub fn delete_named_save(save_id: &str) -> Result<(), String> {
-    delete_named_save_in_dir(save_id, &named_saves_dir_path())
+    delete_named_save_in_dir(save_id, &named_saves_dir_path()?)
 }
 
 pub fn delete_state() -> Result<(), String> {
-    delete_state_at_paths(&local_data_paths())
+    delete_state_at_paths(&local_data_paths()?)
 }
 
 pub fn delete_state_at_path(path: &Path) -> Result<(), String> {
@@ -204,18 +211,8 @@ pub fn delete_state_at_path(path: &Path) -> Result<(), String> {
 }
 
 pub fn save_state_to_path(state: &PersistedState, path: &Path) -> Result<SaveStateResult, String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "Impossible de créer le dossier {} : {error}",
-                parent.display()
-            )
-        })?;
-    }
-
     let sanitized = sanitize_persisted_state(state)?;
-    let json = serde_json::to_vec_pretty(&sanitized)
-        .map_err(|error| format!("Impossible de sérialiser la sauvegarde : {error}"))?;
+    let json = serialize_state_bounded(&sanitized)?;
     let backup_path = write_atomic(path, &json)?;
 
     Ok(SaveStateResult {
@@ -225,44 +222,71 @@ pub fn save_state_to_path(state: &PersistedState, path: &Path) -> Result<SaveSta
 }
 
 pub(crate) fn list_named_saves_in_dir(directory: &Path) -> Result<Vec<NamedSaveSummary>, String> {
-    if !directory.exists() {
-        return Ok(Vec::new());
-    }
-
-    let entries = fs::read_dir(directory).map_err(|error| {
-        format!(
-            "Impossible de lire le dossier des sauvegardes {} : {error}",
-            directory.display()
-        )
-    })?;
-
-    let mut saves = Vec::new();
-
-    for entry in entries {
-        let entry = entry.map_err(|error| {
-            format!(
-                "Impossible de parcourir le dossier des sauvegardes {} : {error}",
-                directory.display()
+    match fs::symlink_metadata(directory) {
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Ok(metadata) if metadata.is_dir() && !is_link_metadata(&metadata) => {}
+        Ok(_) => {
+            return Err(
+                "Le dossier des sauvegardes est un lien ou n'est pas un dossier.".to_string(),
             )
-        })?;
-        let path = entry.path();
-
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
         }
-
+        Err(error) => {
+            return Err(format!(
+                "Impossible de lire le dossier des sauvegardes : {error}"
+            ))
+        }
+    }
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("Impossible de lire {} : {error}", directory.display()))?;
+    let mut candidates = BTreeSet::new();
+    for (index, entry) in entries.enumerate() {
+        if index >= MAX_SAVE_DIRECTORY_ENTRIES {
+            return Err("Trop de fichiers dans le dossier des sauvegardes ; déplacez les anciennes récupérations.".to_string());
+        }
+        let path = entry
+            .map_err(|error| format!("Lecture du dossier impossible : {error}"))?
+            .path();
+        let principal = if path.extension().is_some_and(|ext| ext == "json") {
+            path
+        } else if path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".json.bak"))
+        {
+            path.with_extension("")
+        } else {
+            continue;
+        };
+        candidates.insert(principal);
+        if candidates.len() > MAX_NAMED_SAVES {
+            return Err(format!(
+                "Le dossier dépasse {MAX_NAMED_SAVES} sauvegardes nommées."
+            ));
+        }
+    }
+    let mut saves = Vec::new();
+    let mut bytes_seen = 0u64;
+    for path in candidates {
+        let backup = backup_path_for(&path);
+        for candidate in [&path, &backup] {
+            if let Ok(metadata) = fs::symlink_metadata(candidate) {
+                bytes_seen =
+                    bytes_seen.saturating_add(metadata.len().min(MAX_STATE_FILE_BYTES + 1));
+            }
+        }
+        if bytes_seen > MAX_SAVE_LIST_BYTES {
+            return Err("Le catalogue dépasse le budget de lecture de 64 MiB. Déplacez les anciennes sauvegardes.".to_string());
+        }
         let Ok(result) = load_named_save_envelope_from_path(&path) else {
             continue;
         };
-
         saves.push(NamedSaveSummary {
             meta: result.envelope.meta.clone(),
-            path: path.clone(),
+            path,
             used_backup: result.used_backup,
             data_summary: named_save_data_summary(&result.envelope.state),
         });
     }
-
     saves.sort_by(|left, right| {
         right
             .meta
@@ -270,7 +294,6 @@ pub(crate) fn list_named_saves_in_dir(directory: &Path) -> Result<Vec<NamedSaveS
             .cmp(&left.meta.updated_at)
             .then_with(|| left.meta.display_name.cmp(&right.meta.display_name))
     });
-
     Ok(saves)
 }
 
@@ -314,12 +337,11 @@ pub(crate) fn save_named_state_in_dir(
 ) -> Result<SaveNamedSaveResult, String> {
     let display_name = canonical_named_save_name(display_name)?;
 
-    fs::create_dir_all(directory).map_err(|error| {
-        format!(
-            "Impossible de creer le dossier des sauvegardes {} : {error}",
-            directory.display()
-        )
-    })?;
+    if overwrite_save_id.is_none() && list_named_saves_in_dir(directory)?.len() >= MAX_NAMED_SAVES {
+        return Err(format!(
+            "Maximum de {MAX_NAMED_SAVES} sauvegardes nommées atteint."
+        ));
+    }
 
     let existing_meta = overwrite_save_id
         .map(|save_id| load_named_save_in_dir(save_id, directory).map(|result| result.meta))
@@ -343,8 +365,7 @@ pub(crate) fn save_named_state_in_dir(
         state: sanitize_persisted_state(state)?,
     };
     let path = named_save_path_for_dir(directory, &meta.save_id);
-    let json = serde_json::to_vec_pretty(&envelope)
-        .map_err(|error| format!("Impossible de serialiser la sauvegarde nommee : {error}"))?;
+    let json = serialize_state_bounded(&envelope)?;
     let backup_path = write_atomic(&path, &json)?;
 
     Ok(SaveNamedSaveResult {
@@ -377,8 +398,7 @@ pub(crate) fn rename_named_save_in_dir(
     envelope.meta.updated_at = Utc::now();
 
     let path = named_save_path_for_dir(directory, &envelope.meta.save_id);
-    let json = serde_json::to_vec_pretty(&envelope)
-        .map_err(|error| format!("Impossible de serialiser la sauvegarde nommee : {error}"))?;
+    let json = serialize_state_bounded(&envelope)?;
     write_atomic(&path, &json)?;
 
     Ok(envelope.meta)
@@ -398,9 +418,15 @@ fn parse_data(content: &str) -> Result<LoadDataResult, String> {
     })
 }
 
-fn local_data_paths() -> [PathBuf; 3] {
-    let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
-    data_paths_in(&base)
+fn local_data_paths() -> Result<[PathBuf; 3], String> {
+    // Un dossier utilisateur absent n'autorise jamais un repli silencieux vers ".".
+    let base = dirs::data_local_dir()
+        .filter(|path| path.is_absolute())
+        .ok_or_else(|| {
+            "Le dossier de données utilisateur est indisponible. Aucune écriture locale effectuée."
+                .to_string()
+        })?;
+    Ok(data_paths_in(&base))
 }
 
 fn data_paths_in(base: &Path) -> [PathBuf; 3] {
@@ -417,8 +443,8 @@ fn has_state_at_paths(paths: &[PathBuf; 3]) -> bool {
     paths.iter().any(|path| has_state_at_path(path))
 }
 
-fn preferred_named_saves_dir_path() -> PathBuf {
-    data_file_path().with_file_name("saves")
+fn preferred_named_saves_dir_path() -> Result<PathBuf, String> {
+    Ok(data_file_path()?.with_file_name("saves"))
 }
 
 fn load_state_from_paths(paths: &[PathBuf; 3]) -> Result<LoadStateResult, String> {
@@ -440,27 +466,16 @@ fn delete_state_at_paths(paths: &[PathBuf; 3]) -> Result<(), String> {
 }
 
 fn read_state_file_limited(path: &Path) -> Result<String, String> {
-    let metadata = fs::metadata(path).map_err(|error| {
-        format!(
-            "Impossible de lire les metadonnees de {} : {error}",
-            path.display()
-        )
-    })?;
-
-    if !metadata.is_file() {
-        return Err(format!("{} n'est pas un fichier valide.", path.display()));
-    }
-
+    let file = open_regular_file(path)?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("Impossible de vérifier {} : {error}", path.display()))?;
     if metadata.len() > MAX_STATE_FILE_BYTES {
         return Err(format!(
-            "Le fichier {} depasse la taille maximale autorisee ({} MiB).",
-            path.display(),
-            MAX_STATE_FILE_BYTES / (1024 * 1024)
+            "Le fichier {} depasse la taille maximale autorisee (8 MiB).",
+            path.display()
         ));
     }
-
-    let file = fs::File::open(path)
-        .map_err(|error| format!("Impossible d'ouvrir {} : {error}", path.display()))?;
     let mut reader = BufReader::new(file);
     let mut limited_reader = reader.by_ref().take(MAX_STATE_FILE_BYTES + 1);
     let mut bytes = Vec::new();
@@ -521,11 +536,25 @@ fn load_named_save_envelope_from_path(path: &Path) -> Result<LoadNamedSaveEnvelo
 fn read_and_parse_named_save_envelope(path: &Path) -> Result<(NamedSaveEnvelope, usize), String> {
     let content = read_state_file_limited(path)?;
 
-    parse_named_save_envelope(&content)
-        .map_err(|error| format!("Impossible de charger {} : {error}", path.display()))
+    let (envelope, cleaned) = parse_named_save_envelope(&content)
+        .map_err(|error| format!("Impossible de charger {} : {error}", path.display()))?;
+    let principal = if path.extension().is_some_and(|extension| extension == "bak") {
+        path.with_extension("")
+    } else {
+        path.to_path_buf()
+    };
+    if principal.file_stem().and_then(|name| name.to_str()) != Some(envelope.meta.save_id.as_str())
+    {
+        return Err(format!(
+            "L'identifiant interne ne correspond pas au fichier {}.",
+            path.display()
+        ));
+    }
+    Ok((envelope, cleaned))
 }
 
 fn parse_state(content: &str) -> Result<(PersistedState, usize), String> {
+    check_file_size(content.len())?;
     let raw: Value = serde_json::from_str(content).map_err(|error| error.to_string())?;
 
     if !raw.is_object() {
@@ -535,7 +564,8 @@ fn parse_state(content: &str) -> Result<(PersistedState, usize), String> {
     if is_state_envelope(&raw) {
         parse_state_envelope(&raw)
     } else {
-        let (data, cleaned_legacy_entries) = parse_app_data_value(&raw)?;
+        let (mut data, cleaned_legacy_entries) = parse_app_data_value(&raw)?;
+        sort_loaded_data(&mut data);
         Ok((
             PersistedState {
                 schema_version: PERSISTED_STATE_VERSION,
@@ -548,6 +578,7 @@ fn parse_state(content: &str) -> Result<(PersistedState, usize), String> {
 }
 
 fn parse_named_save_envelope(content: &str) -> Result<(NamedSaveEnvelope, usize), String> {
+    check_file_size(content.len())?;
     let raw: Value = serde_json::from_str(content).map_err(|error| error.to_string())?;
     let object = raw
         .as_object()
@@ -576,12 +607,23 @@ fn is_state_envelope(raw: &Value) -> bool {
 }
 
 fn parse_state_envelope(raw: &Value) -> Result<(PersistedState, usize), String> {
+    let version = match raw.get("schema_version") {
+        None => PERSISTED_STATE_VERSION,
+        Some(value) => value
+            .as_u64()
+            .and_then(|version| u32::try_from(version).ok())
+            .filter(|version| (1..=PERSISTED_STATE_VERSION).contains(version))
+            .ok_or_else(|| {
+                "Version de sauvegarde inconnue ou invalide ; aucune conversion effectuée."
+                    .to_string()
+            })?,
+    };
     let data_value = raw
         .get("data")
         .cloned()
         .unwrap_or_else(|| Value::Object(Map::new()));
 
-    let drafts = match raw.get("drafts") {
+    let mut drafts = match raw.get("drafts") {
         Some(value) if !value.is_null() => serde_json::from_value::<DraftState>(value.clone())
             .map_err(|error| format!("La section drafts est invalide : {error}"))?,
         _ => DraftState::default(),
@@ -589,12 +631,21 @@ fn parse_state_envelope(raw: &Value) -> Result<(PersistedState, usize), String> 
 
     let (data, cleaned_legacy_entries) = parse_app_data_value(&data_value)?;
 
+    remap_legacy_edit(
+        &mut drafts.zone_edit,
+        &data_value,
+        "zones",
+        is_legacy_zone_entry,
+    );
+    remap_legacy_edit(&mut drafts.dungeon_edit, &data_value, "dungeons", |_| false);
+    remap_legacy_edit(&mut drafts.duo_trio_edit, &data_value, "duo_trios", |_| {
+        false
+    });
+    remap_legacy_edit(&mut drafts.arena_edit, &data_value, "arenas", |_| false);
+    validate_drafts(&drafts)?;
+
     let mut state = PersistedState {
-        schema_version: raw
-            .get("schema_version")
-            .and_then(Value::as_u64)
-            .map(|value| value as u32)
-            .unwrap_or(PERSISTED_STATE_VERSION),
+        schema_version: version,
         data,
         drafts,
     };
@@ -619,6 +670,13 @@ fn parse_app_data_value(raw: &Value) -> Result<(AppData, usize), String> {
                 .to_string(),
         );
     }
+
+    let total = ["zones", "dungeons", "duo_trios", "arenas"]
+        .iter()
+        .filter_map(|key| raw.get(*key).and_then(Value::as_array))
+        .try_fold(0usize, |total, items| total.checked_add(items.len()))
+        .ok_or_else(|| "Nombre de sessions invalide.".to_string())?;
+    validate_entry_count(total)?;
 
     let (zones, cleaned_zones) = parse_collection(raw, "zones", is_legacy_zone_entry, |item| {
         let entry = serde_json::from_value::<ZoneEntry>(item).map_err(|error| error.to_string())?;
@@ -658,14 +716,12 @@ fn parse_app_data_value(raw: &Value) -> Result<(AppData, usize), String> {
         },
     )?;
 
-    let mut data = AppData {
+    let data = AppData {
         zones,
         dungeons,
         duo_trios,
         arenas,
     };
-
-    sort_loaded_data(&mut data);
 
     Ok((
         data,
@@ -713,6 +769,10 @@ fn parse_collection<T>(
 }
 
 fn sanitize_persisted_state(state: &PersistedState) -> Result<PersistedState, String> {
+    if !(1..=PERSISTED_STATE_VERSION).contains(&state.schema_version) {
+        return Err("Version de sauvegarde inconnue ; écriture refusée.".to_string());
+    }
+    validate_drafts(&state.drafts)?;
     let mut sanitized = PersistedState {
         schema_version: PERSISTED_STATE_VERSION,
         data: sanitize_app_data(&state.data)?,
@@ -724,7 +784,17 @@ fn sanitize_persisted_state(state: &PersistedState) -> Result<PersistedState, St
 }
 
 fn sanitize_app_data(data: &AppData) -> Result<AppData, String> {
-    let mut sanitized = AppData {
+    let total = [
+        data.zones.len(),
+        data.dungeons.len(),
+        data.duo_trios.len(),
+        data.arenas.len(),
+    ]
+    .into_iter()
+    .try_fold(0usize, usize::checked_add)
+    .ok_or_else(|| "Nombre de sessions invalide.".to_string())?;
+    validate_entry_count(total)?;
+    let sanitized = AppData {
         zones: data
             .zones
             .iter()
@@ -751,49 +821,108 @@ fn sanitize_app_data(data: &AppData) -> Result<AppData, String> {
             .collect::<Result<Vec<_>, _>>()?,
     };
 
-    sort_loaded_data(&mut sanitized);
     Ok(sanitized)
+}
+
+fn validate_entry_count(total: usize) -> Result<(), String> {
+    if total > MAX_TOTAL_ENTRIES {
+        return Err(format!("Maximum de {MAX_TOTAL_ENTRIES} sessions par sauvegarde dépassé. Archivez une partie de l'historique."));
+    }
+    Ok(())
+}
+
+fn validate_drafts(drafts: &DraftState) -> Result<(), String> {
+    fn visit(value: &Value) -> Result<(), String> {
+        match value {
+            Value::String(text) if text.len() > MAX_DRAFT_FIELD_BYTES => Err(format!(
+                "Un champ de brouillon dépasse {MAX_DRAFT_FIELD_BYTES} octets UTF-8."
+            )),
+            Value::Object(fields) => fields.values().try_for_each(visit),
+            Value::Array(items) => items.iter().try_for_each(visit),
+            _ => Ok(()),
+        }
+    }
+    let raw =
+        serde_json::to_value(drafts).map_err(|error| format!("Brouillons invalides : {error}"))?;
+    visit(&raw)
+}
+
+/// La migration retire certaines anciennes lignes : un index du fichier original
+/// doit d'abord être traduit dans la collection nettoyée, jamais réutilisé tel quel.
+fn remap_legacy_edit<T>(
+    edit: &mut Option<PersistedInlineEdit<T>>,
+    raw: &Value,
+    key: &str,
+    is_legacy: impl Fn(&Map<String, Value>) -> bool,
+) {
+    let Some(current) = edit.as_mut() else {
+        return;
+    };
+    let Some(items) = raw.get(key).and_then(Value::as_array) else {
+        *edit = None;
+        return;
+    };
+    let removed = |item: &Value| {
+        item.as_object()
+            .is_some_and(|object| object.contains_key("recorded_on") || is_legacy(object))
+    };
+    if current.index >= items.len() || removed(&items[current.index]) {
+        *edit = None;
+    } else {
+        current.index -= items[..current.index]
+            .iter()
+            .filter(|item| removed(item))
+            .count();
+    }
+}
+
+/// L'identité utilisée pendant le tri est la position d'origine, même en présence
+/// de doublons parfaits. Le brouillon suit donc exactement sa ligne, pas son rang.
+fn sort_with_edit<T, F, U>(items: &mut Vec<T>, edit: &mut Option<PersistedInlineEdit<U>>, score: F)
+where
+    F: Fn(&T) -> f32,
+{
+    let old_index = edit.as_ref().map(|edit| edit.index);
+    let mut indexed = std::mem::take(items)
+        .into_iter()
+        .enumerate()
+        .collect::<Vec<_>>();
+    indexed.sort_by(|(_, left), (_, right)| score(right).total_cmp(&score(left)));
+    if let Some(old_index) = old_index {
+        match indexed.iter().position(|(index, _)| *index == old_index) {
+            Some(new_index) => {
+                if let Some(edit) = edit.as_mut() {
+                    edit.index = new_index;
+                }
+            }
+            None => *edit = None,
+        }
+    }
+    *items = indexed.into_iter().map(|(_, item)| item).collect();
 }
 
 fn sanitize_loaded_state(state: &mut PersistedState) {
     state.schema_version = PERSISTED_STATE_VERSION;
-    sort_loaded_data(&mut state.data);
-
-    if state
-        .drafts
-        .zone_edit
-        .as_ref()
-        .is_some_and(|edit| edit.index >= state.data.zones.len())
-    {
-        state.drafts.zone_edit = None;
-    }
-
-    if state
-        .drafts
-        .dungeon_edit
-        .as_ref()
-        .is_some_and(|edit| edit.index >= state.data.dungeons.len())
-    {
-        state.drafts.dungeon_edit = None;
-    }
-
-    if state
-        .drafts
-        .duo_trio_edit
-        .as_ref()
-        .is_some_and(|edit| edit.index >= state.data.duo_trios.len())
-    {
-        state.drafts.duo_trio_edit = None;
-    }
-
-    if state
-        .drafts
-        .arena_edit
-        .as_ref()
-        .is_some_and(|edit| edit.index >= state.data.arenas.len())
-    {
-        state.drafts.arena_edit = None;
-    }
+    sort_with_edit(
+        &mut state.data.zones,
+        &mut state.drafts.zone_edit,
+        |entry| entry.kamas_per_hour,
+    );
+    sort_with_edit(
+        &mut state.data.dungeons,
+        &mut state.drafts.dungeon_edit,
+        |entry| entry.kamas_per_hour,
+    );
+    sort_with_edit(
+        &mut state.data.duo_trios,
+        &mut state.drafts.duo_trio_edit,
+        |entry| entry.kamas_per_hour,
+    );
+    sort_with_edit(
+        &mut state.data.arenas,
+        &mut state.drafts.arena_edit,
+        |entry| entry.kamas_per_hour,
+    );
 }
 
 fn sort_loaded_data(data: &mut AppData) {
@@ -818,6 +947,9 @@ fn named_save_data_summary(state: &PersistedState) -> NamedSaveDataSummary {
 }
 
 fn canonical_named_save_name(value: &str) -> Result<String, String> {
+    if value.len() > MAX_NAME_BYTES || value.chars().any(char::is_control) {
+        return Err(format!("Nom de sauvegarde invalide : maximum {MAX_NAME_BYTES} octets UTF-8, sans caractère de contrôle."));
+    }
     let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
 
     if normalized.is_empty() {
@@ -841,6 +973,7 @@ fn named_save_path_for_dir(directory: &Path, save_id: &str) -> PathBuf {
 
 fn validate_save_id(save_id: &str) -> Result<(), String> {
     let is_valid = !save_id.is_empty()
+        && save_id.len() <= 96
         && save_id
             .chars()
             .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_');
@@ -858,7 +991,11 @@ fn generate_save_id() -> String {
         .unwrap_or_default()
         .as_nanos();
 
-    format!("save-{}-{unique}", std::process::id())
+    format!(
+        "save-{}-{unique}-{}",
+        std::process::id(),
+        FILE_SEQUENCE.fetch_add(1, AtomicOrdering::Relaxed)
+    )
 }
 
 fn remove_file_if_exists(path: &Path) -> Result<(), String> {
@@ -872,59 +1009,310 @@ fn remove_file_if_exists(path: &Path) -> Result<(), String> {
     }
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Option<PathBuf>, String> {
-    let temp_path = temp_path_for(path);
-    let swap_path = swap_path_for(path);
-    let backup_path = backup_path_for(path);
+fn check_file_size(size: usize) -> Result<(), String> {
+    if size as u64 > MAX_STATE_FILE_BYTES {
+        return Err(format!(
+            "La sauvegarde depasse la taille maximale autorisee ({} MiB). Aucun fichier n'a été remplacé.",
+            MAX_STATE_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
 
-    let result = (|| -> Result<Option<PathBuf>, String> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temp_path)
-            .map_err(|error| {
-                format!(
-                    "Impossible de créer le fichier temporaire {} : {error}",
-                    temp_path.display()
-                )
+/// La limite est appliquée pendant la sérialisation, avant allocation du bloc suivant.
+/// Cela borne aussi la mémoire lorsque l'indentation agrandit un import compact.
+struct BoundedJsonWriter {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+
+impl Write for BoundedJsonWriter {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let size = self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .filter(|size| *size <= self.limit)
+            .ok_or_else(|| {
+                io::Error::new(ErrorKind::InvalidData, "Limite JSON de 8 MiB dépassée")
             })?;
-
-        file.write_all(bytes).map_err(|error| {
-            format!(
-                "Impossible d'écrire le fichier temporaire {} : {error}",
-                temp_path.display()
-            )
-        })?;
-
-        file.sync_all().map_err(|error| {
-            format!(
-                "Impossible de synchroniser le fichier temporaire {} : {error}",
-                temp_path.display()
-            )
-        })?;
-
-        let backup_created = if path.exists() {
-            fs::copy(path, &backup_path).map_err(|error| {
-                format!(
-                    "Impossible de créer la sauvegarde de secours {} : {error}",
-                    backup_path.display()
-                )
-            })?;
-            Some(backup_path.clone())
-        } else {
-            None
-        };
-
-        replace_file_with_rollback(&temp_path, path, &swap_path)?;
-        Ok(backup_created)
-    })();
-
-    if result.is_err() {
-        let _ = fs::remove_file(&temp_path);
-        let _ = fs::remove_file(&swap_path);
+        self.bytes
+            .try_reserve(size - self.bytes.len())
+            .map_err(|_| io::Error::other("Mémoire insuffisante pour la sauvegarde"))?;
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
     }
 
-    result
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+fn serialize_state_bounded<T: Serialize>(state: &T) -> Result<Vec<u8>, String> {
+    let mut writer = BoundedJsonWriter {
+        bytes: Vec::new(),
+        limit: MAX_STATE_FILE_BYTES as usize,
+    };
+    serde_json::to_writer_pretty(&mut writer, state).map_err(|error| {
+        format!("Sauvegarde refusée (limite de 8 MiB) : {error}. Aucun fichier remplacé.")
+    })?;
+    Ok(writer.bytes)
+}
+
+fn is_link_metadata(metadata: &fs::Metadata) -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // FILE_ATTRIBUTE_REPARSE_POINT : couvre aussi les jonctions Windows.
+        if metadata.file_attributes() & 0x400 != 0 {
+            return true;
+        }
+    }
+    metadata.file_type().is_symlink()
+}
+
+fn check_regular_destination(path: &Path) -> Result<bool, String> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if !is_link_metadata(&metadata) && metadata.is_file() => Ok(true),
+        Ok(_) => Err(format!(
+            "Destination refusée : {} est un lien ou n'est pas un fichier ordinaire.",
+            path.display()
+        )),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "Impossible de vérifier {} : {error}",
+            path.display()
+        )),
+    }
+}
+
+/// Ouvre sans suivre le dernier lien et vérifie le fichier réellement ouvert.
+/// O_NONBLOCK évite de rester bloqué si un FIFO remplace le chemin avant l'ouverture.
+fn open_regular_file(path: &Path) -> Result<File, String> {
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT : ouvrir le point lui-même, pas sa cible.
+        options.custom_flags(0x0020_0000);
+    }
+    let file = options.open(path).map_err(|error| {
+        format!(
+            "Impossible de lire {} sans suivre de lien : {error}",
+            path.display()
+        )
+    })?;
+    let metadata = file.metadata().map_err(|error| {
+        format!(
+            "Impossible de vérifier le fichier ouvert {} : {error}",
+            path.display()
+        )
+    })?;
+    if is_link_metadata(&metadata) || !metadata.is_file() {
+        return Err(format!(
+            "{} n'est pas un fichier ordinaire autorisé.",
+            path.display()
+        ));
+    }
+    Ok(file)
+}
+
+/// Les dossiers créés sur Unix sont privés. On ne modifie jamais les permissions
+/// d'un dossier d'export préexistant, qui peut appartenir à l'utilisateur hors EvoFarm.
+fn prepare_parent(path: &Path) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if let Ok(metadata) = fs::symlink_metadata(parent) {
+        if is_link_metadata(&metadata) || !metadata.is_dir() {
+            return Err(format!(
+                "Dossier refusé : {} est un lien ou n'est pas un dossier.",
+                parent.display()
+            ));
+        }
+    }
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(parent).map_err(|error| {
+        format!(
+            "Impossible de créer le dossier {} : {error}",
+            parent.display()
+        )
+    })?;
+    let metadata = fs::symlink_metadata(parent).map_err(|error| {
+        format!(
+            "Impossible de vérifier le dossier {} : {error}",
+            parent.display()
+        )
+    })?;
+    if is_link_metadata(&metadata) || !metadata.is_dir() {
+        return Err(format!(
+            "Dossier de sauvegarde refusé : {}.",
+            parent.display()
+        ));
+    }
+    fs::canonicalize(parent).map_err(|error| {
+        format!(
+            "Impossible de résoudre le dossier {} : {error}",
+            parent.display()
+        )
+    })
+}
+
+fn create_workspace(parent: &Path) -> Result<PathBuf, String> {
+    for _ in 0..16 {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let sequence = FILE_SEQUENCE.fetch_add(1, AtomicOrdering::Relaxed);
+        let path = parent.join(format!(
+            ".evofarm-recovery-{}-{stamp}-{sequence}",
+            std::process::id()
+        ));
+        let builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        let mut builder = builder;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        match builder.create(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(format!(
+                    "Impossible de créer un dossier temporaire privé : {error}"
+                ))
+            }
+        }
+    }
+    Err("Impossible de réserver un dossier temporaire unique.".to_string())
+}
+
+fn write_new_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(|error| {
+        format!(
+            "Impossible de créer exclusivement {} : {error}",
+            path.display()
+        )
+    })?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|error| {
+            format!(
+                "Impossible d'écrire ou synchroniser {} : {error}",
+                path.display()
+            )
+        })
+}
+
+fn sync_directory(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        File::open(path)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|error| {
+                format!(
+                    "Impossible de synchroniser le dossier {} : {error}",
+                    path.display()
+                )
+            })?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+fn is_recognized_save(content: &str) -> bool {
+    parse_state(content).is_ok() || parse_named_save_envelope(content).is_ok()
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<Option<PathBuf>, String> {
+    // F03 : rien sur le disque, pas même la copie de secours, avant ce contrôle.
+    check_file_size(bytes.len())?;
+    let parent = prepare_parent(path)?;
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "Nom de fichier de sauvegarde absent.".to_string())?;
+    let target = parent.join(file_name);
+    let backup = backup_path_for(&target);
+    let had_existing = check_regular_destination(&target)?;
+    check_regular_destination(&backup)?;
+
+    let workspace = create_workspace(&parent)?;
+    let pending = workspace.join("nouvelle-sauvegarde.json");
+    let previous = workspace.join("ancienne-sauvegarde.json");
+    let pending_backup = workspace.join("nouveau-secours.json");
+    let previous_backup = workspace.join("ancien-secours.json");
+
+    let result: Result<Option<PathBuf>, String> = (|| {
+        write_new_file(&pending, bytes)?;
+        if had_existing {
+            let old_content = read_state_file_limited(&target);
+            // Une copie de secours valide reste utilisable même si le principal
+            // est devenu trop volumineux ou contient des octets non UTF-8.
+            let primary_valid = old_content
+                .as_ref()
+                .is_ok_and(|content| is_recognized_save(content));
+            let keep_backup = !primary_valid
+                && read_state_file_limited(&backup)
+                    .is_ok_and(|content| is_recognized_save(&content));
+            if !keep_backup {
+                let old_content = old_content?;
+                write_new_file(&pending_backup, old_content.as_bytes())?;
+                replace_file_with_rollback(&pending_backup, &backup, &previous_backup)?;
+            }
+        }
+        sync_directory(&workspace)?;
+        sync_directory(&parent)?;
+        replace_file_with_rollback(&pending, &target, &previous)?;
+        sync_directory(&parent)?;
+        Ok(if had_existing {
+            Some(backup_path_for(path))
+        } else {
+            None
+        })
+    })();
+
+    match result {
+        Ok(result) => {
+            // On ne retire que nos fichiers connus après confirmation du remplacement.
+            for file in [&pending, &previous, &pending_backup, &previous_backup] {
+                let _ = fs::remove_file(file);
+            }
+            let _ = fs::remove_dir(&workspace);
+            Ok(result)
+        }
+        Err(error) => {
+            // F05 : ne jamais nettoyer une récupération lors d'un échec, même si le
+            // retour arrière a échoué ou si un antivirus verrouille la destination.
+            Err(format!(
+                "{error} Fichiers de récupération conservés dans {}.",
+                workspace.display()
+            ))
+        }
+    }
 }
 
 fn replace_file_with_rollback(
@@ -932,48 +1320,53 @@ fn replace_file_with_rollback(
     path: &Path,
     swap_path: &Path,
 ) -> Result<(), String> {
-    let had_existing = path.exists();
+    replace_file_with_rollback_using(temp_path, path, swap_path, |from, to| fs::rename(from, to))
+}
 
+/// L'opération de renommage est injectable pour tester les pannes, sans dépendre
+/// des permissions du compte exécutant les tests ou d'un disque réellement plein.
+fn replace_file_with_rollback_using(
+    temp_path: &Path,
+    path: &Path,
+    swap_path: &Path,
+    mut rename: impl FnMut(&Path, &Path) -> io::Result<()>,
+) -> Result<(), String> {
+    let had_existing = check_regular_destination(path)?;
+    if fs::symlink_metadata(swap_path).is_ok() {
+        return Err(format!(
+            "Fichier de récupération déjà présent : {}. Il est conservé.",
+            swap_path.display()
+        ));
+    }
     if had_existing {
-        if swap_path.exists() {
-            fs::remove_file(swap_path).map_err(|error| {
-                format!(
-                    "Impossible de nettoyer le fichier temporaire de remplacement {} : {error}",
-                    swap_path.display()
-                )
-            })?;
-        }
-
-        fs::rename(path, swap_path).map_err(|error| {
+        rename(path, swap_path).map_err(|error| {
             format!(
                 "Impossible de préparer le remplacement de {} : {error}",
                 path.display()
             )
         })?;
     }
-
-    match fs::rename(temp_path, path) {
-        Ok(()) => {
-            if had_existing && swap_path.exists() {
-                let _ = fs::remove_file(swap_path);
-            }
-            Ok(())
-        }
+    match rename(temp_path, path) {
+        Ok(()) => Ok(()),
         Err(error) => {
-            let rollback_error = if had_existing && swap_path.exists() && !path.exists() {
-                fs::rename(swap_path, path).err()
+            let rollback = if had_existing {
+                // Ne pas écraser un fichier apparu entre-temps à la destination.
+                if fs::symlink_metadata(path).is_ok() {
+                    Err(io::Error::new(
+                        ErrorKind::AlreadyExists,
+                        "la destination a changé",
+                    ))
+                } else {
+                    rename(swap_path, path)
+                }
             } else {
-                None
+                Ok(())
             };
-
-            match rollback_error {
-                Some(rollback_error) => Err(format!(
-                    "Impossible de finaliser la sauvegarde vers {} : {error}. La restauration automatique a aussi échoué : {rollback_error}",
-                    path.display()
-                )),
-                None => Err(format!(
-                    "Impossible de finaliser la sauvegarde vers {} : {error}",
-                    path.display()
+            match rollback {
+                Ok(()) => Err(format!("Impossible de finaliser {} : {error}. Ancien état conservé.", path.display())),
+                Err(rollback_error) => Err(format!(
+                    "Impossible de finaliser {} : {error}. Restauration impossible : {rollback_error}. Ancien fichier conservé dans {} ; nouveau fichier dans {}.",
+                    path.display(), swap_path.display(), temp_path.display()
                 )),
             }
         }
@@ -987,34 +1380,6 @@ fn backup_path_for(path: &Path) -> PathBuf {
         .unwrap_or("data.json");
 
     path.with_file_name(format!("{file_name}.bak"))
-}
-
-fn temp_path_for(path: &Path) -> PathBuf {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("data.json");
-
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    path.with_file_name(format!("{file_name}.tmp-{}-{unique}", std::process::id()))
-}
-
-fn swap_path_for(path: &Path) -> PathBuf {
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("data.json");
-
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    path.with_file_name(format!("{file_name}.swap-{}-{unique}", std::process::id()))
 }
 
 fn is_legacy_zone_entry(value: &Map<String, Value>) -> bool {
@@ -2336,3 +2701,7 @@ mod tests {
         cleanup_temp_dir(&directory);
     }
 }
+
+#[cfg(test)]
+#[path = "security_tests/storage.rs"]
+mod security_regressions;

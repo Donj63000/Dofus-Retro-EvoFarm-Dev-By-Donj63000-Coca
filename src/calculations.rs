@@ -1,9 +1,14 @@
+use crate::limits::{
+    MAX_CALCULATED_VALUE, MAX_DURATION_SECONDS, MAX_INPUT_KAMAS, MAX_NAME_BYTES,
+    MAX_NUMBER_INPUT_BYTES, MAX_QUANTITY,
+};
 use crate::models::{ArenaEntry, DungeonEntry, DuoTrioEntry, DurationInput, ZoneEntry};
-use chrono::NaiveDateTime;
-
-const MAX_SELECTOR_DURATION_SECONDS: u32 = 24 * 3600 + 59 * 60 + 59;
+use chrono::{Datelike, Duration, NaiveDateTime};
 
 pub fn parse_f32(value: &str) -> Option<f32> {
+    if value.len() > MAX_NUMBER_INPUT_BYTES {
+        return None;
+    }
     let normalized = normalize_number_input(value);
 
     if normalized.is_empty() {
@@ -20,6 +25,9 @@ pub fn parse_non_negative_f32(value: &str, field_label: &str) -> Result<f32, Str
 }
 
 pub fn parse_u32(value: &str) -> Option<u32> {
+    if value.len() > MAX_NUMBER_INPUT_BYTES {
+        return None;
+    }
     let normalized = normalize_unsigned_input(value);
 
     if normalized.is_empty() {
@@ -42,7 +50,10 @@ pub fn parse_hms_to_seconds(value: &str) -> Option<f32> {
         return None;
     }
 
-    Some((hours * 3600 + minutes * 60 + seconds) as f32)
+    let total = hours
+        .checked_mul(3600)?
+        .checked_add(minutes * 60 + seconds)?;
+    (total <= MAX_DURATION_SECONDS).then_some(total as f32)
 }
 
 pub fn parse_duration_input(input: &DurationInput) -> Result<f32, String> {
@@ -54,7 +65,12 @@ pub fn parse_duration_input(input: &DurationInput) -> Result<f32, String> {
         return Err("Les minutes et les secondes doivent rester entre 00 et 59.".to_string());
     }
 
-    let total_seconds = (hours * 3600 + minutes * 60 + seconds) as f32;
+    let total_seconds = hours
+        .checked_mul(3600)
+        .and_then(|total| total.checked_add(minutes * 60 + seconds))
+        .filter(|total| *total <= MAX_DURATION_SECONDS)
+        .ok_or_else(|| "La durée ne doit pas dépasser 24:59:59.".to_string())?
+        as f32;
 
     if total_seconds <= 0.0 {
         return Err("La durée doit être supérieure à 00:00:00.".to_string());
@@ -64,7 +80,7 @@ pub fn parse_duration_input(input: &DurationInput) -> Result<f32, String> {
 }
 
 pub fn duration_input_from_seconds(value: f32) -> DurationInput {
-    let total_seconds = (value.max(0.0).round() as u32).min(MAX_SELECTOR_DURATION_SECONDS);
+    let total_seconds = (value.max(0.0).round() as u32).min(MAX_DURATION_SECONDS);
     let hours = total_seconds / 3600;
     let minutes = (total_seconds % 3600) / 60;
     let seconds = total_seconds % 60;
@@ -107,14 +123,23 @@ pub fn parse_recorded_at(value: &str) -> Result<Option<NaiveDateTime>, String> {
         return Ok(None);
     }
 
-    NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M")
-        .map(Some)
-        .map_err(|_| "Date et heure invalides. Format attendu: YYYY-MM-DD HH:MM.".to_string())
+    let date = NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M")
+        .map_err(|_| "Date et heure invalides. Format attendu: YYYY-MM-DD HH:MM.".to_string())?;
+    validate_recorded_at(Some(date))?;
+    Ok(Some(date))
 }
 
 pub fn format_kamas(value: f32) -> String {
-    let rounded = value.round() as i64;
-    format_with_spaces(rounded)
+    if !value.is_finite() {
+        return "—".to_string();
+    }
+    let rounded = value.round();
+    // La conversion saturante f32 -> i64 masquait les grands résultats valides.
+    // Le chemin textuel ne dépend pas de la plage des entiers signés.
+    if f64::from(rounded) >= i64::MIN as f64 && f64::from(rounded) < i64::MAX as f64 {
+        return format_with_spaces(rounded as i64);
+    }
+    group_digits(&format!("{:.0}", rounded.abs()), rounded < 0.0)
 }
 
 pub fn format_number(value: f32) -> String {
@@ -138,8 +163,10 @@ pub fn format_recorded_at(value: Option<NaiveDateTime>) -> String {
 }
 
 pub fn format_with_spaces(value: i64) -> String {
-    let negative = value < 0;
-    let s = value.abs().to_string();
+    group_digits(&value.unsigned_abs().to_string(), value < 0)
+}
+
+fn group_digits(s: &str, negative: bool) -> String {
     let mut out = String::new();
 
     for (i, ch) in s.chars().rev().enumerate() {
@@ -190,10 +217,12 @@ pub fn sanitize_zone_entry(mut entry: ZoneEntry) -> Result<ZoneEntry, String> {
     validate_non_empty_name(&entry.name, "Le nom de la zone")?;
     entry.session_time_seconds =
         validate_positive_f32(entry.session_time_seconds, "La durée de session")?;
+    validate_session_interval(entry.recorded_at, entry.session_time_seconds)?;
     entry.session_total_kamas =
         validate_non_negative_f32(entry.session_total_kamas, "La valeur totale de session")?;
     entry.kamas_per_hour =
         zone_kamas_per_hour(entry.session_total_kamas, entry.session_time_seconds);
+    validate_calculated_values(&[entry.kamas_per_hour])?;
     Ok(entry)
 }
 
@@ -201,11 +230,13 @@ pub fn sanitize_dungeon_entry(mut entry: DungeonEntry) -> Result<DungeonEntry, S
     entry.name = entry.name.trim().to_string();
     validate_non_empty_name(&entry.name, "Le nom du donjon")?;
     entry.run_time_minutes = validate_positive_f32(entry.run_time_minutes, "Le temps du donjon")?;
+    validate_session_interval(entry.recorded_at, entry.run_time_minutes * 60.0)?;
     entry.gross_kamas_per_run =
         validate_non_negative_f32(entry.gross_kamas_per_run, "Le gain brut moyen")?;
     entry.key_price = validate_non_negative_f32(entry.key_price, "Le prix de la clé")?;
     entry.net_kamas_per_run = entry.gross_kamas_per_run - entry.key_price;
     entry.kamas_per_hour = dungeon_kamas_per_hour(entry.net_kamas_per_run, entry.run_time_minutes);
+    validate_calculated_values(&[entry.net_kamas_per_run, entry.kamas_per_hour])?;
     Ok(entry)
 }
 
@@ -213,6 +244,7 @@ pub fn sanitize_duo_trio_entry(mut entry: DuoTrioEntry) -> Result<DuoTrioEntry, 
     entry.name = entry.name.trim().to_string();
     validate_non_empty_name(&entry.name, "Le nom du run duo/trio")?;
     entry.run_time_seconds = validate_positive_f32(entry.run_time_seconds, "Le temps du run")?;
+    validate_session_interval(entry.recorded_at, entry.run_time_seconds)?;
     entry.loot_kamas_per_run =
         validate_non_negative_f32(entry.loot_kamas_per_run, "Le loot total du run")?;
     entry.capture_stone_price =
@@ -231,6 +263,13 @@ pub fn sanitize_duo_trio_entry(mut entry: DuoTrioEntry) -> Result<DuoTrioEntry, 
     entry.net_kamas_per_run = entry.gross_kamas_per_run - entry.total_cost;
     entry.kamas_per_hour = duo_trio_kamas_per_hour(entry.net_kamas_per_run, entry.run_time_seconds);
 
+    validate_calculated_values(&[
+        entry.total_key_cost,
+        entry.gross_kamas_per_run,
+        entry.total_cost,
+        entry.net_kamas_per_run,
+        entry.kamas_per_hour,
+    ])?;
     Ok(entry)
 }
 
@@ -239,15 +278,63 @@ pub fn sanitize_arena_entry(mut entry: ArenaEntry) -> Result<ArenaEntry, String>
     validate_non_empty_name(&entry.name, "Le nom de la session PL arène")?;
     entry.round_time_minutes =
         validate_positive_f32(entry.round_time_minutes, "Le temps de la ronde")?;
+    validate_session_interval(entry.recorded_at, entry.round_time_minutes * 60.0)?;
     entry.seat_price = validate_non_negative_f32(entry.seat_price, "Le prix d'une place")?;
     entry.capture_price = validate_non_negative_f32(entry.capture_price, "Le prix d'une capture")?;
 
+    if entry.seats_sold > MAX_QUANTITY || entry.captures_count > MAX_QUANTITY {
+        return Err(format!(
+            "Les quantités ne doivent pas dépasser {MAX_QUANTITY}."
+        ));
+    }
     entry.gross_revenue = entry.seat_price * entry.seats_sold as f32;
     entry.total_capture_cost = entry.capture_price * entry.captures_count as f32;
     entry.net_profit = entry.gross_revenue - entry.total_capture_cost;
     entry.kamas_per_hour = arena_kamas_per_hour(entry.net_profit, entry.round_time_minutes);
 
+    validate_calculated_values(&[
+        entry.gross_revenue,
+        entry.total_capture_cost,
+        entry.net_profit,
+        entry.kamas_per_hour,
+    ])?;
     Ok(entry)
+}
+
+/// Les dates admises restent représentables par le stockage et les axes du graphique.
+pub(crate) fn validate_recorded_at(value: Option<NaiveDateTime>) -> Result<(), String> {
+    if value.is_some_and(|date| !(1970..=9999).contains(&date.year())) {
+        return Err("L'année de la session doit être comprise entre 1970 et 9999.".to_string());
+    }
+    Ok(())
+}
+
+/// Aucune conversion flottant/entier ni addition de date ne précède ces vérifications.
+pub(crate) fn validate_session_interval(
+    start_at: Option<NaiveDateTime>,
+    seconds: f32,
+) -> Result<(), String> {
+    if !seconds.is_finite() || !(1.0..=MAX_DURATION_SECONDS as f32).contains(&seconds) {
+        return Err("La durée doit être comprise entre 00:00:01 et 24:59:59.".to_string());
+    }
+    validate_recorded_at(start_at)?;
+    if let Some(start) = start_at {
+        let end = Duration::try_seconds(seconds.round() as i64)
+            .and_then(|duration| start.checked_add_signed(duration))
+            .ok_or_else(|| "La fin de session dépasse les dates représentables.".to_string())?;
+        validate_recorded_at(Some(end))?;
+    }
+    Ok(())
+}
+
+fn validate_calculated_values(values: &[f32]) -> Result<(), String> {
+    if values
+        .iter()
+        .any(|value| !value.is_finite() || value.abs() > MAX_CALCULATED_VALUE)
+    {
+        return Err("Le résultat du calcul dépasse les limites de sécurité.".to_string());
+    }
+    Ok(())
 }
 
 fn normalize_number_input(value: &str) -> String {
@@ -277,7 +364,9 @@ fn normalize_unsigned_input(value: &str) -> String {
 
 fn parse_duration_part(value: &str, label: &str) -> Result<u32, String> {
     let trimmed = value.trim();
-
+    if value.len() > MAX_NUMBER_INPUT_BYTES {
+        return Err(format!("Le champ {label} est trop long."));
+    }
     if trimmed.is_empty() {
         return Err(format!("Le champ {label} est obligatoire."));
     }
@@ -291,7 +380,11 @@ fn validate_non_empty_name(value: &str, field_label: &str) -> Result<(), String>
     if value.is_empty() {
         return Err(format!("{field_label} est obligatoire."));
     }
-
+    if value.len() > MAX_NAME_BYTES || value.chars().any(char::is_control) {
+        return Err(format!(
+            "{field_label} : maximum {MAX_NAME_BYTES} octets UTF-8, sans caractère de contrôle."
+        ));
+    }
     Ok(())
 }
 
@@ -319,7 +412,12 @@ fn validate_non_negative_f32(value: f32, field_label: &str) -> Result<f32, Strin
             "{field_label} : une valeur positive ou nulle est requise."
         ));
     }
-
+    if value > MAX_INPUT_KAMAS {
+        return Err(format!(
+            "{field_label} : valeur attendue entre 0 et {} kamas.",
+            format_kamas(MAX_INPUT_KAMAS)
+        ));
+    }
     Ok(value)
 }
 
@@ -570,3 +668,7 @@ mod tests {
         assert_eq!(entry.kamas_per_hour, -1_100_000.0);
     }
 }
+
+#[cfg(test)]
+#[path = "security_tests/calculations.rs"]
+mod security_regressions;

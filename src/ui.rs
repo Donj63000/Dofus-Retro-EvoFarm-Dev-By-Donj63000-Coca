@@ -7,10 +7,12 @@ use crate::models::{
     ArenaEntry, ArenaForm, DofusClass, DungeonEntry, DungeonForm, DuoTrioEntry, DuoTrioForm,
     DurationInput, PartyMode, Tab, ZoneEntry, ZoneForm,
 };
+#[cfg(test)]
+use crate::reports::build_report_summary;
 use crate::reports::{
-    build_activity_recommendations, build_report_summary, local_now, ActivityKind,
-    ActivityRecommendation, ActivityRecommendationGroup, ActivitySearchFilters, CategoryBarSeries,
-    CategorySeries, ReportPeriod, ReportSummary, SessionBarSegment,
+    build_activity_recommendations, local_now, ActivityKind, ActivityRecommendation,
+    ActivityRecommendationGroup, ActivitySearchFilters, CategoryBarSeries, CategorySeries,
+    ReportPeriod, ReportSummary, SessionBarSegment,
 };
 use crate::theme;
 use crate::{
@@ -1589,8 +1591,16 @@ impl MyApp {
         let now = local_now();
         #[cfg(test)]
         let now = self.review_now.unwrap_or(now);
-        let summary =
-            build_report_summary(&self.data, self.report_period, self.report_categories, now);
+        let summary = crate::reports::cached_report_summary(
+            &mut self.report_cache,
+            &self.data,
+            self.report_period,
+            self.report_categories,
+            now,
+            self.report_bar_mode,
+        );
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_secs(1));
 
         self.render_bilans_overview(ui, &summary);
         ui.add_space(SECTION_GAP);
@@ -1602,6 +1612,9 @@ impl MyApp {
             |ui| {
                 self.render_report_controls(ui);
                 ui.add_space(8.0);
+                if self.report_bar_mode && summary.bar_chart_aggregated {
+                    muted_text(ui, "Affichage agrégé : gains répartis au prorata du temps sur 256 créneaux au maximum. Les totaux du bilan restent complets.");
+                }
                 self.render_report_chart(ui, &summary);
             },
         );
@@ -5211,7 +5224,9 @@ fn cumulative_chart_x_bounds(summary: &ReportSummary) -> Option<(f64, f64)> {
     let mut max_at = last_visible_at?;
 
     if max_at <= min_at {
-        max_at = min_at + chrono::Duration::seconds(60);
+        max_at = min_at
+            .checked_add_signed(chrono::Duration::seconds(60))
+            .unwrap_or(min_at);
     }
 
     Some((datetime_to_plot_x(min_at), datetime_to_plot_x(max_at)))
@@ -5389,7 +5404,12 @@ fn render_activity_tooltip_content(
 fn render_cumulative_point_tooltip(ui: &mut egui::Ui, point: &crate::reports::CumulativePoint) {
     ui.set_min_width(320.0);
 
-    for (index, session) in point.sessions.iter().enumerate() {
+    for (index, session) in point
+        .sessions
+        .iter()
+        .take(crate::limits::MAX_TOOLTIP_SESSIONS)
+        .enumerate()
+    {
         if index > 0 {
             ui.add_space(6.0);
             ui.separator();
@@ -5404,6 +5424,12 @@ fn render_cumulative_point_tooltip(ui: &mut egui::Ui, point: &crate::reports::Cu
             session.delta_value,
             session.kamas_per_hour,
         );
+    }
+    if point.sessions.len() > crate::limits::MAX_TOOLTIP_SESSIONS {
+        ui.label(format!(
+            "… et {} autres sessions, incluses dans le total.",
+            point.sessions.len() - crate::limits::MAX_TOOLTIP_SESSIONS
+        ));
     }
 }
 
@@ -5695,6 +5721,7 @@ mod tests {
             recent_sessions: Vec::new(),
             chart_series,
             chart_bars: Vec::new(),
+            bar_chart_aggregated: false,
             period_started_at,
         }
     }

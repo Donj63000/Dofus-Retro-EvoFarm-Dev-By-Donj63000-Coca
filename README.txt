@@ -12,6 +12,18 @@ Aucun téléchargement d'image n'est nécessaire au lancement.
 Activités et fonctionnalités
 ---------------------------
 
+Version 0.3.1 : correctifs de l'audit de cybersécurité.
+Les saisies et imports sont bornés, les sauvegardes sont protégées contre les
+échecs d'écriture et les gros graphiques utilisent un affichage agrégé signalé.
+Le schéma JSON reste en version 2. Les données dépassant les nouvelles limites
+sont refusées explicitement : 10 000 sessions par état, 8 Mio par fichier,
+durées de 1 seconde à 24 h 59 min 59 s. Faire une copie du dossier de données
+avant la mise à jour et fermer toutes les instances d'EvoFarm.
+Les récupérations .evofarm-recovery-* conservées après une erreur ne doivent
+pas être effacées avant d'avoir copié et vérifié leurs fichiers.
+Les limites et procédures détaillées sont publiées dans le dépôt :
+docs/security/CORRECTIFS-AUDIT-2026-09.md
+
 - Zones : durée de session, gains totaux et kamas par heure.
 - Donjons : durée, gains bruts, prix de la clef et bénéfice net par run.
 - Duo / Trio : loot, clefs, pierre de capture et revente de la capture pleine.
