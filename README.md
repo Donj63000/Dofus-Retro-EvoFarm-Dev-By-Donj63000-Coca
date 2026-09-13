@@ -1,115 +1,59 @@
-<p align="center">
-  <img src="logo.png" alt="Logo EvoFarm" width="180">
-</p>
-
-<h1 align="center">Dofus Retro EvoFarm</h1>
-<p align="center"><strong>Dev By Donj63000(Coca)</strong><br>Votre compagnon de farm pour Dofus Retro.</p>
+<a id="haut"></a>
 
 <p align="center">
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe"><strong>Windows</strong></a>
-  ·
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-macOS-universal.zip"><strong>macOS</strong></a>
-  ·
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Linux-x64.tar.gz"><strong>Linux</strong></a>
-  ·
-  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases">Toutes les versions</a>
+  <img src="logo.png" alt="Logo EvoFarm" width="140">
 </p>
 
-EvoFarm transforme vos résultats de jeu en bilans clairs : enregistrez vos sessions, calculez vos bénéfices nets et comparez les activités selon votre classe et votre temps disponible. L'application s'adresse à **tous les joueurs de Dofus Retro**.
+<h1 align="center">EvoFarm</h1>
 
-Son interface bleu nuit, cyan et argent réunit les portraits des douze classes, des formulaires lisibles et des graphiques. Le logo, le fond et les icônes sont intégrés au programme.
+<p align="center">
+  <strong>Suivez vos sessions. Choisissez votre prochain farm.</strong><br>
+  Bilans, bénéfices et comparaisons pour tous les joueurs de Dofus Retro.
+</p>
 
-**Un mois avec EvoFarm : 60 sessions, 20 jours d'activité et trois classes.** Cette démonstration suit un joueur du 14 août au 12 septembre 2026 : zones, donjons, captures en duo/trio et PL arène. Les formulaires remplis, classements, filtres et sauvegardes montrent comment exploiter son historique au quotidien.
+<p align="center">
+  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest"><img src="https://img.shields.io/github/v/release/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca?style=flat-square&amp;color=3cbad4&amp;label=version" alt="Dernière version disponible"></a>
+  <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/actions/workflows/ci.yml"><img src="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/actions/workflows/ci.yml/badge.svg?branch=master" alt="État de la CI Windows, Linux et macOS"></a>
+</p>
 
-Les données et prix sont **fictifs**. Les **11 107 000 kamas** affichés regroupent la valeur estimée des ressources des zones et les bénéfices après coûts des autres activités.
+<p align="center">
+  <a href="#télécharger-et-commencer"><strong>Télécharger</strong></a> ·
+  <a href="#evofarm-en-images"><strong>Voir les 12 captures</strong></a> ·
+  <a href="docs/demo/README.md#importer-la-demo"><strong>Essayer la démo</strong></a> ·
+  <a href="#documentation-technique">Documentation technique</a>
+</p>
 
-**[Les explications détaillées de la démo](docs/demo/README.md)** · **[Télécharger le mois fictif en JSON](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/mois-demo.json)** · **[Comment importer la démo](docs/demo/README.md#importer-la-demo)**
+---
 
-## EvoFarm en images
+| Choisir son activité | Comprendre ses résultats | Suivre sa progression |
+| :--- | :--- | :--- |
+| Trouvez quoi farmer selon **votre classe et votre temps disponible**. | Comparez les gains en tenant compte des **clefs, pierres et captures**. | Retrouvez vos **bilans, classements et historiques** au fil des sessions. |
 
-Les **12 captures ci-dessous** montrent les principales situations du quotidien, avec le même historique fictif. Cliquez sur une image pour l'afficher en grand.
-
-### 1. Voir sa progression sur le mois
-
-Le bilan sur 30 jours réunit les 60 sessions, les indicateurs et les courbes cumulées des quatre activités. Le joueur voit comment ses sorties contribuent à son résultat mensuel.
-
-![EvoFarm après un mois fictif : 60 sessions et courbes de progression par activité](docs/demo/images/01-bilan-mensuel.png)
-
-### 2. Examiner sa dernière semaine
-
-Le filtre **7 jours** et le **Mode bâton** mettent en évidence les durées, les bonnes sessions et les pertes : ici, 12 sessions représentent 2 330 500 kamas de valeur suivie.
-
-![Bilan hebdomadaire : durées, gains et session déficitaire](docs/demo/images/02-bilan-hebdomadaire.png)
-
-### 3. Comparer ses activités et ses classes
-
-Les meilleures activités, les résultats par classe et les sessions récentes permettent de comprendre d'où viennent les gains et de retrouver les sorties qui les expliquent.
-
-![Détail des bilans : meilleures activités, classes et sessions récentes](docs/demo/images/03-activites-classes-historique.png)
-
-### 4. Choisir quoi farmer avec une heure disponible
-
-Le joueur sélectionne son **Crâ** et une durée de **01:00:00**. EvoFarm utilise son historique pour proposer des activités, leur durée moyenne et une estimation des gains.
-
-![Recherche d'activité pour un Crâ disposant d'une heure](docs/demo/images/04-recherche-activite.png)
-
-### 5. Enregistrer une session en zone
-
-La durée et la valeur estimée des ressources donnent immédiatement un rendement. Le formulaire rempli côtoie les 24 sessions de zones, classées par kamas par heure.
-
-![Zones : formulaire rempli, prévision immédiate et historique](docs/demo/images/05-zones.png)
-
-### 6. Connaître le bénéfice d'un donjon
-
-EvoFarm déduit le prix de la clef du gain brut : **183 000 kamas − 14 000 kamas = 169 000 kamas nets**. L'historique permet ensuite de comparer les runs enregistrés.
-
-![Donjons : coût de la clef, bénéfice net et classement des runs](docs/demo/images/06-donjons.png)
-
-### 7. Calculer un run en duo avec capture
-
-Le loot et la revente de la capture sont confrontés au coût des **deux clefs** et de la pierre. Ce Dragon Cochon donne une prévision de **245 500 kamas nets** pour le run.
-
-![Duo : loot, deux clefs, pierre de capture et bénéfice net](docs/demo/images/07-duo.png)
-
-### 8. Passer au trio
-
-Le mode **Trio** prend en compte trois clefs. La prévision du Blop Multicolore Royal atteint **254 000 kamas nets** ; les runs correspondants sont visibles dans l'historique filtré. Le résultat concerne le run entier, sans partage automatique entre joueurs.
-
-![Trio : trois clefs, prévision de rendement et historique filtré](docs/demo/images/08-trio.png)
-
-### 9. Suivre les recettes et les pertes du PL arène
-
-Les places vendues produisent les recettes, puis EvoFarm retire le coût des captures. La liste montre aussi une session à **−41 000 kamas**, conservée dans les bilans pour refléter les résultats réels de la saisie.
-
-![PL arène : places vendues, coût des captures et session déficitaire](docs/demo/images/09-pl-arene.png)
-
-### 10. Corriger une session existante
-
-Le bouton **Modifier** retrouve les champs de la session. Une correction de 278 000 à 293 000 kamas actualise aussitôt la prévision ; le joueur peut **Enregistrer** ou **Annuler**. Cette modification reste en cours dans la capture et ne change pas les totaux de la démo.
-
-![Modification d'une session : champs remplis, prévision et commandes de validation](docs/demo/images/10-modifier-session.png)
-
-### 11. Sauvegarder son historique et ses brouillons
-
-Une sauvegarde nommée conserve les **60 sessions et les quatre brouillons**. Le dialogue résume le contenu avant de garder cet état du mois.
-
-![Sauvegarde nommée : nom et résumé de l'historique avec ses brouillons](docs/demo/images/11-sauvegarder.png)
-
-### 12. Retrouver ses sauvegardes du mois
-
-La bibliothèque présente les instantanés de l'historique avec leur date et leur contenu. Le joueur peut **Charger**, **Renommer** ou **Supprimer** une sauvegarde. La galerie illustre quatre instantanés hebdomadaires ; le JSON téléchargeable contient l'état final.
-
-![Bibliothèque des sauvegardes : historique du mois et actions disponibles](docs/demo/images/12-charger.png)
+<p align="center"><strong>Windows · macOS · Linux</strong><br>Sans compte, sans abonnement. Vos données restent sur votre ordinateur.</p>
 
 ## Télécharger et commencer
 
-| Système | Téléchargement | Démarrage |
-| --- | --- | --- |
-| **Windows x64** | [EvoFarm.exe](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe) ou [ZIP portable](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Windows-x64.zip) | Lancez `EvoFarm.exe`. |
-| **macOS Intel et Apple Silicon** | [ZIP universel](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-macOS-universal.zip) | Extrayez le ZIP, placez `EvoFarm.app` dans Applications et ouvrez-la. |
-| **Linux x64** | [Archive TAR.GZ](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Linux-x64.tar.gz) | Extrayez l'archive puis lancez `./EvoFarm/evofarm`. |
+<table>
+  <tr>
+    <th width="33%">Windows</th>
+    <th width="34%">macOS</th>
+    <th width="33%">Linux</th>
+  </tr>
+  <tr>
+    <td align="center"><strong>x64 · Portable</strong><br><br><a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm.exe"><strong>Télécharger EvoFarm.exe</strong></a><br><a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Windows-x64.zip">Version ZIP</a></td>
+    <td align="center"><strong>Intel + Apple Silicon</strong><br><br><a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-macOS-universal.zip"><strong>Télécharger le ZIP universel</strong></a><br>Une seule application, deux architectures</td>
+    <td align="center"><strong>x64 · Bureau Linux</strong><br><br><a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/EvoFarm-Linux-x64.tar.gz"><strong>Télécharger l'archive TAR.GZ</strong></a><br>Base Ubuntu 22.04 / glibc 2.35</td>
+  </tr>
+</table>
 
-Aucun compte ou abonnement n'est requis. Sélectionnez une activité, renseignez votre session et consultez vos bilans. Le programme fonctionne localement, sans service ni synchronisation cloud.
+**1. Lancez EvoFarm** → **2. Renseignez une session** → **3. Consultez vos bilans**
+
+[Toutes les versions et notes de publication](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases) · [Importer le mois de démonstration](docs/demo/README.md#importer-la-demo)
+
+<details>
+<summary><strong>Installation et premier lancement sur votre système</strong></summary>
+
+Sous Windows, lancez `EvoFarm.exe`. Sur macOS, extrayez le ZIP, placez `EvoFarm.app` dans Applications et ouvrez-la. Sous Linux, extrayez l'archive et lancez `./EvoFarm/evofarm`.
 
 ### Windows
 
@@ -136,7 +80,10 @@ tar -xzf EvoFarm-Linux-x64.tar.gz
 
 L'archive contient également `logo.png`, `fr.donj63000.evofarm.desktop` et **`install-desktop.sh`**. L'exécution facultative de `./EvoFarm/install-desktop.sh` ajoute le raccourci et son icône au menu des applications de votre utilisateur, sans droits administrateur. **Conservez ensuite le dossier extrait au même emplacement** : le raccourci référence son exécutable. Pour déplacer le programme, relancez ce script depuis son nouvel emplacement. Rien n'est installé automatiquement à l'extraction ou au lancement d'EvoFarm.
 
-### Vérifier un téléchargement
+</details>
+
+<details>
+<summary><strong>Vérifier l'intégrité d'un téléchargement</strong></summary>
 
 Depuis la version 0.3.0, le fichier [SHA256SUMS](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest/download/SHA256SUMS) contient les empreintes des **quatre téléchargements** : l'exécutable Windows et les trois archives. Comparez la valeur calculée avec la ligne correspondant à votre fichier :
 
@@ -151,24 +98,143 @@ sha256sum EvoFarm-Linux-x64.tar.gz
 shasum -a 256 EvoFarm-macOS-universal.zip
 ```
 
-## Suivre et comparer vos activités
+</details>
 
-| Activité | Ce que vous mesurez |
-| --- | --- |
-| **Zones** | Durée totale, valeur de la session et kamas par heure. |
-| **Donjons** | Gains bruts, coût de la clef et bénéfice net par run. |
-| **Duo / Trio** | Loot, clefs, pierre de capture et valeur de revente de la capture pleine. |
-| **PL arène** | Places vendues, recettes, coût des captures et bénéfice net. |
+## EvoFarm en images
 
-- Classe, date et heure associées à chaque session.
-- Modification, suppression et recherche des entrées.
-- Bilans sur 24 h, 7 jours, 30 jours ou l'historique complet.
-- Indicateurs, classements, graphiques en barres et courbes.
-- Recherche d'activités selon la classe et le temps disponible.
-- Sauvegardes nommées : créer, charger, renommer et supprimer vos jeux de données.
-- Import JSON, copie de secours et conservation des brouillons.
+**Un mois de jeu, un historique qui devient utile.** Du 14 août au 12 septembre 2026, un joueur alterne zones, donjons, runs en équipe et PL arène avec un Crâ, un Sadida et un Féca.
+
+| **60 sessions** | **20 jours actifs** | **3 classes** | **48 h 16 de jeu** |
+| :---: | :---: | :---: | :---: |
+| Quatre types d'activités | Des pauses et des sorties régulières | Des résultats à comparer | Un mois d'historique |
+
+> **Démonstration fictive.** Les prix et résultats servent à présenter le logiciel. Les **11 107 000 kamas** du bilan regroupent la valeur estimée des ressources des zones et les bénéfices après coûts des autres activités ; ce total n'est pas un solde encaissé.
+
+Les **12 captures sont affichées ci-dessous**. Cliquez sur une image pour l'ouvrir en grand ; la [galerie détaillée](docs/demo/README.md) explique les calculs de chaque situation.
+
+### Comprendre sa progression
+
+**01 · Le mois d'un coup d'œil.** Les courbes cumulées et les indicateurs réunissent les 60 sessions : le joueur voit ce que chaque activité apporte à son mois.
+
+![Bilan mensuel : 60 sessions et courbes cumulées des quatre activités](docs/demo/images/01-bilan-mensuel.png)
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>02 · Zoom sur la semaine</h4>
+      <a href="docs/demo/images/02-bilan-hebdomadaire.png"><img src="docs/demo/images/02-bilan-hebdomadaire.png" alt="Bilan hebdomadaire : durées, gains et session déficitaire" width="440"></a>
+      <p>Le filtre <strong>7 jours</strong> et le <strong>Mode bâton</strong> font ressortir les durées, les bonnes sorties et les pertes. Ici : 12 sessions, pour 2 330 500 kamas de valeur suivie.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4>03 · Activités, classes et historique</h4>
+      <a href="docs/demo/images/03-activites-classes-historique.png"><img src="docs/demo/images/03-activites-classes-historique.png" alt="Détail des bilans : meilleures activités, classes et sessions récentes" width="440"></a>
+      <p>Les classements et les sessions récentes relient les totaux aux sorties concrètes. Le joueur compare ses activités et retrouve les résultats de chaque classe.</p>
+    </td>
+  </tr>
+</table>
+
+
+### Choisir son prochain farm
+
+**04 · « J'ai une heure avec mon Crâ. »** EvoFarm utilise les sessions passées pour proposer des activités compatibles, avec leur durée moyenne et leurs gains estimés.
+
+![Recherche d'activité pour un Crâ disposant d'une heure](docs/demo/images/04-recherche-activite.png)
+
+### Enregistrer ses résultats
+
+Renseignez votre session : la prévision s'actualise avant validation, puis l'historique permet de comparer les sorties.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>05 · Farm en zone</h4>
+      <a href="docs/demo/images/05-zones.png"><img src="docs/demo/images/05-zones.png" alt="Zones : formulaire rempli, prévision immédiate et historique" width="440"></a>
+      <p>La durée et la <strong>valeur estimée des ressources</strong> donnent le rendement en kamas par heure. Les 24 sessions de zones alimentent déjà le classement.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4>06 · Runs de donjon</h4>
+      <a href="docs/demo/images/06-donjons.png"><img src="docs/demo/images/06-donjons.png" alt="Donjons : coût de la clef, bénéfice net et classement des runs" width="440"></a>
+      <p>Le coût de la clef est retiré du gain brut : <strong>183 000 − 14 000 = 169 000 kamas nets</strong>. Le joueur compare ensuite les runs enregistrés.</p>
+    </td>
+  </tr>
+</table>
+
+
+### Comparer les runs en équipe
+
+Loot, clefs, pierre et revente de la capture : tous les montants renseignés contribuent au résultat du run. Le bénéfice concerne l'équipe entière, sans partage automatique entre joueurs.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>07 · Duo avec capture</h4>
+      <a href="docs/demo/images/07-duo.png"><img src="docs/demo/images/07-duo.png" alt="Duo : loot, deux clefs, pierre de capture et bénéfice net" width="440"></a>
+      <p>Pour ce Dragon Cochon, EvoFarm prend en compte <strong>deux clefs</strong> et la pierre de capture. La prévision atteint <strong>245 500 kamas nets</strong>.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4>08 · Passage au trio</h4>
+      <a href="docs/demo/images/08-trio.png"><img src="docs/demo/images/08-trio.png" alt="Trio : trois clefs, prévision de rendement et historique filtré" width="440"></a>
+      <p>Le mode Trio calcule le coût de <strong>trois clefs</strong>. Le Blop Multicolore Royal affiche <strong>254 000 kamas nets</strong>, avec les runs précédents dans la liste filtrée.</p>
+    </td>
+  </tr>
+</table>
+
+
+### Garder des résultats fidèles à ses sessions
+
+Une sortie moins rentable ou une erreur de saisie font aussi partie du suivi quotidien.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>09 · Recettes et pertes en PL arène</h4>
+      <a href="docs/demo/images/09-pl-arene.png"><img src="docs/demo/images/09-pl-arene.png" alt="PL arène : places vendues, coût des captures et session déficitaire" width="440"></a>
+      <p>EvoFarm retire le coût des captures des recettes des places vendues. Une session à <strong>−41 000 kamas</strong> reste visible et incluse dans les bilans.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4>10 · Correction d'une session</h4>
+      <a href="docs/demo/images/10-modifier-session.png"><img src="docs/demo/images/10-modifier-session.png" alt="Modification : champs remplis, prévision et commandes de validation" width="440"></a>
+      <p>Le bouton <strong>Modifier</strong> retrouve les champs existants. La prévision évolue immédiatement ; le joueur peut enregistrer ou annuler. Cette correction reste en cours dans la capture et ne change pas les totaux de la démo.</p>
+    </td>
+  </tr>
+</table>
+
+
+### Retrouver son historique
+
+Conservez vos sessions et vos formulaires en préparation, puis retrouvez vos sauvegardes au fil du mois.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>11 · Sauvegarde nommée</h4>
+      <a href="docs/demo/images/11-sauvegarder.png"><img src="docs/demo/images/11-sauvegarder.png" alt="Sauvegarde nommée : nom et résumé de l'historique avec ses brouillons" width="440"></a>
+      <p>Le dialogue résume les <strong>60 sessions et les quatre brouillons</strong> avant de conserver cet état du mois.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4>12 · Bibliothèque du mois</h4>
+      <a href="docs/demo/images/12-charger.png"><img src="docs/demo/images/12-charger.png" alt="Bibliothèque : sauvegardes du mois et actions disponibles" width="440"></a>
+      <p><strong>Charger, renommer, supprimer</strong> : chaque sauvegarde affiche sa date et son contenu. La démo illustre quatre instantanés hebdomadaires ; le JSON proposé contient l'état final.</p>
+    </td>
+  </tr>
+</table>
+
+
+<p align="center">
+  <strong>Explorez ce même mois dans EvoFarm</strong><br>
+  <a href="https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/mois-demo.json">Télécharger le JSON fictif</a> ·
+  <a href="docs/demo/README.md#importer-la-demo">Guide d'import</a> ·
+  <a href="docs/demo/README.md">Les calculs en détail</a>
+</p>
+
+> Sauvegardez votre historique personnel avant l'import. Dans <strong>Bilans</strong>, choisissez <strong>Depuis le début</strong> pour retrouver les 60 sessions après la période de démonstration.
 
 ## Vos données restent sur votre ordinateur
+
+EvoFarm fonctionne localement, sans service ni synchronisation cloud. Vos sessions et vos brouillons restent dans votre dossier utilisateur, séparément du programme.
+
+<details>
+<summary><strong>Emplacement des données, sauvegardes, import et mises à jour</strong></summary>
 
 Le dossier de données dépend du système :
 
@@ -192,7 +258,12 @@ Les anciens emplacements sont reconnus automatiquement lorsqu'aucune sauvegarde 
 
 **Importer un JSON remplace les données actuellement chargées.** Créez une sauvegarde nommée si vous souhaitez conserver plusieurs historiques. Pour transférer vos données entre ordinateurs ou systèmes, copiez manuellement `data.json` depuis le dossier de données puis importez cette copie sur l'autre ordinateur. Aucune synchronisation automatique entre appareils n'est fournie.
 
-## Compiler et vérifier le projet
+</details>
+
+## Documentation technique
+
+<details>
+<summary><strong>Compiler, tester et créer les distributions Windows, Linux et macOS</strong></summary>
 
 La CI utilise Rust **1.93.0**. Installez **Python 3.11 ou ultérieur** pour les scripts de packaging Unix et leurs tests. Les commandes suivantes vérifient le code sur le système courant :
 
@@ -264,6 +335,8 @@ La [CI multiplateforme](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-
 
 Un tag `vX.Y.Z` correspondant à la version de `Cargo.toml` lance cette validation avant publication. La GitHub Release réunit **EvoFarm.exe**, **EvoFarm-Windows-x64.zip**, **EvoFarm-Linux-x64.tar.gz**, **EvoFarm-macOS-universal.zip** et un **SHA256SUMS global de quatre lignes**. Les sources restent disponibles dans le dépôt et les archives source de GitHub ; les binaires ne sont pas stockés dans l'historique courant des sources.
 
+</details>
+
 ## Crédits
 
 **Dofus Retro EvoFarm [Dev By Donj63000(Coca)]**
@@ -271,3 +344,5 @@ Un tag `vX.Y.Z` correspondant à la version de `Cargo.toml` lance cette validati
 Remerciements spéciaux à **Clody**, pour une partie du travail réalisé sur ce logiciel, des idées qui l'ont fait avancer et de la manière dont le projet a été pensé.
 
 EvoFarm n'est pas l'œuvre d'un seul auteur : cette contribution fait pleinement partie de son histoire et de sa conception.
+
+<p align="center"><a href="#haut">Retour en haut</a> · <a href="https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest">Télécharger EvoFarm</a></p>
