@@ -77,17 +77,17 @@ L'option `--format` applique rustfmt, puis le script vérifie le formatage, Clip
 
 Faire ensuite passer les quatre cibles CI existantes et vérifier manuellement sur Windows : ouverture sans réseau, ajout/édition/suppression, conservation d'une saisie après erreur, sauvegarde/rechargement, import refusé sans perte, récupération `.bak`, brouillon après tri et passage courbes/bâtons sur un gros historique. Ne pas diffuser un nouvel exécutable sur la seule base des contrôles Python.
 
-## Références techniques
-
-### Réception dans EvoFarm 0.3.1
+## Réception dans EvoFarm 0.3.1
 
 Le patch fourni a été appliqué sans conflit : les 20 fichiers de l'index Git correspondaient exactement aux empreintes de blobs du patch avant intégration. La version 0.3.1 applique ensuite rustfmt et deux adaptations nécessaires à la validation : la mutabilité de `DirBuilder` est limitée à Unix pour satisfaire Clippy sous Windows ; le message d'échec d'ouverture conserve le préfixe « Impossible de lire » attendu par le test de compatibilité existant. Les contrôles de sécurité ne sont pas désactivés.
 
-Un test Windows supplémentaire crée une véritable jonction dans un dossier temporaire et vérifie le refus de lecture du point de réanalyse, de catalogage et d'écriture via ce dossier, sans modifier sa cible. Les tests Windows et Unix s'exécutent sur leurs systèmes respectifs dans la CI.
+Un test Windows supplémentaire crée une véritable jonction dans un dossier temporaire et vérifie le refus de lecture du point de réanalyse, de catalogage et d'écriture via ce dossier, sans modifier sa cible. Les tests Windows et Unix s'exécutent sur leurs systèmes respectifs dans la CI. Le binaire Windows distribué passe également le test de démarrage sur le runner temporaire, comme les binaires Linux et macOS.
 
 La réception locale sous Windows avec Rust 1.93.0 a validé rustfmt, Clippy sans avertissement, les tests Rust et Python, les 21 scénarios de packaging et cargo-audit. Les deux essais natifs `native_visual_review` et `native_demo_review` ont produit respectivement 45 et 12 captures ; les essais utilisent des états isolés du profil personnel. L'audit ne signale aucune vulnérabilité connue ; les quatre avertissements de maintenance restent présents.
 
 Les nombres de tests indiqués plus haut décrivent l'environnement de préparation du patch. Le dépôt a depuis reçu les contrôles du README vidéo ; le poste de développement contient aussi des tests de tournage locaux non inclus dans cette publication. Les résultats de la CI du tag `v0.3.1` font foi pour les sources distribuées. Le workflow de release vérifie les quatre cibles, les archives et les empreintes avant de publier les binaires et leurs attestations.
+
+## Références techniques
 
 - Rust, `std::fs::OpenOptions` et création exclusive : https://doc.rust-lang.org/std/fs/struct.OpenOptions.html
 - Rust, précautions liées aux courses de chemins : https://doc.rust-lang.org/std/fs/index.html

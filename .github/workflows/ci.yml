@@ -95,6 +95,9 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: ./scripts/build-release.ps1
+      - name: Verifier le lancement Windows du binaire distribue
+        if: matrix.platform == 'windows'
+        run: python scripts/smoke-app.py --binary EvoFarm.exe
       - name: Construire Linux
         if: matrix.platform == 'linux'
         run: python scripts/build-unix-release.py --platform linux
