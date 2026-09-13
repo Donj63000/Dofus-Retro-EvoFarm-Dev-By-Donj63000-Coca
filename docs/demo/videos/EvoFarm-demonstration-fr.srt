@@ -1,0 +1,119 @@
+1
+00:00:00,000 --> 00:00:10,000
+EvoFarm : comprendre son farm, comparer ses sessions
+et choisir sa prochaine activité sur Dofus Retro.
+
+2
+00:00:10,000 --> 00:00:22,000
+Le bilan rassemble votre historique et les gains de chaque activité.
+Ce parcours utilise un mois de données fictives.
+
+3
+00:00:22,000 --> 00:00:32,000
+Passez des courbes cumulées aux sessions individuelles.
+Le filtre de période permet de regarder la dernière semaine.
+
+4
+00:00:32,000 --> 00:00:40,000
+Dans Zones, renseignez le lieu, la classe, la durée
+et la valeur estimée des ressources mises en vente.
+
+5
+00:00:40,000 --> 00:00:45,000
+Ici : 278 000 kamas en 46 minutes,
+soit une prévision de 362 609 kamas par heure.
+
+6
+00:00:45,000 --> 00:00:54,000
+La valeur passe à 293 000 kamas.
+EvoFarm recalcule immédiatement : 382 174 kamas par heure.
+
+7
+00:00:54,000 --> 00:01:00,000
+La session est enregistrée et rejoint le classement.
+Son résultat reste disponible dans l'historique.
+
+8
+00:01:00,000 --> 00:01:15,000
+Dans Donjons, le prix de la clef est déduit du gain brut.
+183 000 − 14 000 = 169 000 kamas nets pour ce run.
+
+9
+00:01:15,000 --> 00:01:30,000
+En duo ou trio, les clefs, la pierre et la capture sont prises en compte.
+Le résultat concerne le run entier, sans partage automatique.
+
+10
+00:01:30,000 --> 00:01:40,000
+En PL arène, les recettes des places sont comparées au coût des captures.
+Les sessions à perte restent incluses dans les bilans.
+
+11
+00:01:40,000 --> 00:01:49,000
+Pour préparer la prochaine sortie, choisissez votre classe
+puis le temps dont vous disposez.
+
+12
+00:01:49,000 --> 00:02:02,000
+Avec un Crâ et une heure disponible, les suggestions s'adaptent.
+Ces estimations proviennent de votre propre historique.
+
+13
+00:02:02,000 --> 00:02:11,000
+Donnez un nom à votre sauvegarde
+pour conserver cet état de l'historique et ses brouillons.
+
+14
+00:02:11,000 --> 00:02:24,000
+La bibliothèque retrouve la sauvegarde créée.
+Vous pouvez ensuite la charger ou la renommer.
+
+15
+00:02:24,000 --> 00:02:36,000
+Le bilan inclut maintenant la nouvelle session.
+Les valeurs estimées des zones ne sont pas des ventes garanties.
+
+16
+00:02:36,000 --> 00:02:45,000
+Côté sécurité, EvoFarm fonctionne localement.
+Vous saisissez vos sessions sans renseigner de compte Ankama.
+
+17
+00:02:45,000 --> 00:02:54,000
+Le code applicatif examiné ne contient pas de client réseau
+ni de collecte automatique des données du jeu.
+
+18
+00:02:54,000 --> 00:03:04,000
+Les données sont stockées en JSON dans votre dossier utilisateur.
+Elles ne sont pas chiffrées : protégez aussi vos copies.
+
+19
+00:03:04,000 --> 00:03:14,000
+L'import contrôle la taille et les valeurs du fichier.
+Sauvegardez d'abord votre historique : l'import le remplace.
+
+20
+00:03:14,000 --> 00:03:24,000
+Téléchargez depuis les Releases du dépôt du projet.
+Comparez le SHA-256 du fichier avec l'empreinte publiée.
+
+21
+00:03:24,000 --> 00:03:34,000
+Une empreinte identique vérifie l'intégrité du téléchargement.
+Elle ne certifie pas, à elle seule, l'innocuité du programme.
+
+22
+00:03:34,000 --> 00:03:43,000
+L'exécutable Windows n'a pas de signature d'éditeur.
+Au 13 septembre 2026, l'audit ne détecte aucune vulnérabilité connue.
+
+23
+00:03:43,000 --> 00:03:52,000
+L'audit relève toutefois quatre dépendances non maintenues.
+Ces contrôles ne constituent pas une garantie absolue de sécurité.
+
+24
+00:03:52,000 --> 00:04:00,000
+EvoFarm : vos sessions, vos comparaisons, vos décisions.
+Le projet, les sources et les téléchargements sont disponibles sur GitHub.

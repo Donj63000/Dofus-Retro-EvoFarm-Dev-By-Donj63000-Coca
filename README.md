@@ -18,6 +18,7 @@
 
 <p align="center">
   <a href="#télécharger-et-commencer"><strong>Télécharger</strong></a> ·
+  <a href="#evofarm-en-vidéo"><strong>Voir la vidéo · 4 min</strong></a> ·
   <a href="#evofarm-en-images"><strong>Voir les 12 captures</strong></a> ·
   <a href="docs/demo/README.md#importer-la-demo"><strong>Essayer la démo</strong></a> ·
   <a href="#documentation-technique">Documentation technique</a>
@@ -30,6 +31,16 @@
 | Trouvez quoi farmer selon **votre classe et votre temps disponible**. | Comparez les gains en tenant compte des **clefs, pierres et captures**. | Retrouvez vos **bilans, classements et historiques** au fil des sessions. |
 
 <p align="center"><strong>Windows · macOS · Linux</strong><br>Sans compte, sans abonnement. Vos données restent sur votre ordinateur.</p>
+
+## EvoFarm en vidéo
+
+**Découvrez EvoFarm en 4 minutes** : bilans, saisie d'une session, recherche d'activité et sauvegardes, avec un point sur le fonctionnement local et les limites de sécurité.
+
+<video src="https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/videos/EvoFarm-demonstration-4min.mp4" controls width="960" preload="metadata" poster="docs/demo/video-apercu.png"></video>
+
+[Ouvrir ou télécharger la vidéo](https://raw.githubusercontent.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/master/docs/demo/videos/EvoFarm-demonstration-4min.mp4) · [Sous-titres français](docs/demo/videos/EvoFarm-demonstration-fr.srt)
+
+*Démonstration scénarisée avec des données fictives · 1080p · Musique et sous-titres français intégrés, sans voix off. Les constats de sécurité présentés datent du 13 septembre 2026.*
 
 ## Télécharger et commencer
 
