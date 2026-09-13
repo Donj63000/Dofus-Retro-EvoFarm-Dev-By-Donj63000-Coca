@@ -18,6 +18,7 @@
 
 <p align="center">
   <a href="#télécharger-et-commencer"><strong>Télécharger</strong></a> ·
+  <a href="#fonctionnement-et-confiance"><strong>Fonctionnement et sécurité</strong></a> ·
   <a href="#evofarm-en-vidéo"><strong>Voir la vidéo · 4 min</strong></a> ·
   <a href="#evofarm-en-images"><strong>Voir les 12 captures</strong></a> ·
   <a href="docs/demo/README.md#importer-la-demo"><strong>Essayer la démo</strong></a> ·
@@ -32,6 +33,8 @@
 
 <p align="center"><strong>Windows · macOS · Linux</strong><br>Sans compte, sans abonnement. Vos données restent sur votre ordinateur.</p>
 
+**EvoFarm est un carnet de sessions avec calculs et bilans automatiques.** Vous jouez normalement, puis vous renseignez vous-même l'activité, la classe, la durée et les montants. Le logiciel calcule les rendements, conserve votre historique et vous aide à comparer vos prochaines sorties. Il peut être utilisé avec Dofus fermé : aucune connexion au jeu ou au compte Ankama n'est nécessaire.
+
 ## EvoFarm en vidéo
 
 **Découvrez EvoFarm en 4 minutes** : bilans, saisie d'une session, recherche d'activité et sauvegardes, avec un point sur le fonctionnement local et les limites de sécurité.
@@ -41,6 +44,87 @@ https://github.com/user-attachments/assets/030daba9-fac2-4277-8b7d-90173de4b67c
 [Ouvrir ou télécharger la vidéo](https://github.com/user-attachments/assets/030daba9-fac2-4277-8b7d-90173de4b67c) · [Sous-titres français](docs/demo/videos/EvoFarm-demonstration-fr.srt)
 
 *Démonstration scénarisée avec des données fictives · 1080p · Musique et sous-titres français intégrés, sans voix off. Les constats de sécurité présentés datent du 13 septembre 2026.*
+
+<a id="fonctionnement-et-confiance"></a>
+
+## Fonctionnement, fiabilité et sécurité
+
+**Vous gardez la main sur vos données et vos décisions.** Voici ce que fait EvoFarm **0.3.0**, comment ses résultats sont calculés et quels contrôles vous pouvez vérifier avant de l'utiliser.
+
+<details>
+<summary><strong>1. Comment fonctionne le logiciel, et quels éléments permettent de vérifier sa sécurité ?</strong></summary>
+
+Le parcours est simple : **saisir une session → vérifier la prévision → enregistrer → consulter les bilans**. Les formulaires contrôlent les valeurs, les calculs sont effectués sur votre ordinateur et l'historique est conservé en JSON dans votre dossier utilisateur. Le code applicatif ne prévoit ni connexion à un compte, ni envoi de vos sessions à un serveur, ni télémétrie.
+
+Les sources sont consultables : [saisie et enregistrement](src/main.rs), [formulaires](src/ui.rs), [calculs](src/calculations.rs), [bilans et suggestions](src/reports.rs), [stockage et import](src/storage.rs). Les [contrôles GitHub Actions](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/actions/workflows/ci.yml) exécutent les tests, les vérifications de compilation et de distribution, ainsi qu'un audit des dépendances. Vous pouvez aussi [compiler le projet vous-même](#documentation-technique).
+
+**État vérifié le 13 septembre 2026 :** `cargo audit` sur [Cargo.lock](Cargo.lock) ne signale aucune vulnérabilité connue et relève quatre dépendances non maintenues : `derivative`, `instant`, `paste` et `ttf-parser`. Ce contrôle porte sur les avis de sécurité connus ; il ne certifie pas l'absence de tout défaut ou comportement malveillant dans un exécutable.
+
+Téléchargez depuis les [Releases de ce dépôt](https://github.com/Donj63000/Dofus-Retro-EvoFarm-Dev-By-Donj63000-Coca/releases/latest) et comparez l'empreinte SHA-256 publiée. Une empreinte identique confirme que le fichier correspond à celui distribué ; elle ne remplace pas une analyse de sécurité. La distribution Windows n'a pas de signature d'éditeur ; le bundle macOS possède une signature ad hoc, sans notarisation Apple.
+
+</details>
+
+<details>
+<summary><strong>2. Les prix sont manuels : peut-on se fier aux résultats ?</strong></summary>
+
+**Les chiffres de démonstration sont fictifs ; vos résultats personnels utilisent vos propres saisies.** EvoFarm ne récupère pas les prix de l'HDV et ne vérifie pas les ventes. Vous renseignez les montants correspondant à votre serveur et à vos sessions. La fiabilité de l'estimation dépend donc de la qualité et de l'actualité de ces montants.
+
+Les [formules sont explicites](src/calculations.rs) :
+
+| Activité | Valeur prise en compte |
+| :--- | :--- |
+| Zones | Valeur totale des ressources renseignée pour la session |
+| Donjons | Gain brut − prix de la clef |
+| Duo / Trio | Loot + prix de vente de la capture − pierre − prix unitaire de la clef × nombre de joueurs |
+| PL arène | Prix d'une place × places vendues − prix d'une capture × captures utilisées |
+
+Le rendement horaire est la **valeur de la session divisée par sa durée en heures**. Par exemple, un donjon à **183 000 kamas bruts**, avec une clef à **14 000 kamas**, donne **169 000 kamas après ce coût**. S'il dure 30 minutes, le rendement calculé est de **338 000 kamas/h**. Cette conversion n'assure pas qu'un deuxième run rapportera autant.
+
+Les coûts déduits sont ceux des champs prévus : taxes de vente, consommables ou autres frais ne sont pas ajoutés automatiquement. Une ressource estimée n'est pas une vente encaissée. Les totaux peuvent réunir des valeurs estimées et des bénéfices après les coûts renseignés ; ils ne représentent pas nécessairement votre solde de kamas. Les pertes sont conservées et une saisie erronée peut être corrigée avec **Modifier**.
+
+</details>
+
+<details>
+<summary><strong>3. Qu'apporte EvoFarm par rapport à un tableau Excel ?</strong></summary>
+
+Un tableur peut effectuer ces calculs et reste adapté si vous avez déjà votre méthode. L'intérêt d'EvoFarm est de fournir un parcours prêt à l'emploi pour Dofus Retro : formulaires par activité, prévision immédiate, historique modifiable, bilans par période, graphiques, comparaison des classes et sauvegardes nommées, sans construire ni entretenir les formules d'un classeur.
+
+**Exemple : « J'ai une heure avec mon Crâ, que puis-je faire d'après mes sessions ? »** La recherche filtre votre historique par classe, regroupe les activités et utilise leur durée moyenne pour estimer combien de sessions entières tiennent dans ce temps. Elle affiche jusqu'à trois propositions par catégorie. Le rendement moyen est calculé avec la valeur totale divisée par le temps total ; avec un budget de temps, le classement utilise la valeur estimée des sessions réalisables. Ces [règles sont consultables dans le code](src/reports.rs).
+
+L'aide à la décision dépend de votre historique : elle ne découvre pas tous les farms du jeu, ne prédit pas les drops et ne garantit aucun rendement. Enregistrez plusieurs sorties représentatives pour comparer vos habitudes sur une base plus utile.
+
+</details>
+
+<details>
+<summary><strong>4. Quelles précautions connaître avant de commencer ?</strong></summary>
+
+Pour découvrir l'interface, commencez par la vidéo puis, si vous le souhaitez, par le [mois fictif à importer](docs/demo/README.md#importer-la-demo). **Avant un import, créez une sauvegarde nommée de votre historique actuel** : la confirmation d'import annonce le remplacement des données et brouillons affichés, puis la mise à jour de l'autosave. Le fichier de démo n'est pas chargé automatiquement dans une nouvelle installation.
+
+L'import lit des données JSON, sans exécuter de script. Il limite la lecture à **8 Mio**, contrôle la structure et les valeurs attendues et recalcule les résultats dérivés. Ces protections contre des fichiers invalides ne remplacent pas une sauvegarde personnelle. Les écritures passent par un fichier temporaire et un mécanisme de secours ; conservez aussi une copie séparée des données auxquelles vous tenez.
+
+Vos fichiers JSON **ne sont pas chiffrés** : une personne ayant accès à ces fichiers peut les lire. N'y inscrivez aucun mot de passe et vérifiez leur contenu avant de les partager. Gardez les protections de votre système actives ; en cas d'alerte sur un téléchargement, vérifiez sa provenance et son empreinte avant de décider de l'exécuter.
+
+</details>
+
+<details>
+<summary><strong>5. Peut-on voir une démonstration concrète avant de télécharger ?</strong></summary>
+
+**Oui : le [lecteur vidéo de 4 minutes](#evofarm-en-vidéo) est directement sur cette page.** Il montre les formulaires et calculs du véritable logiciel, une session enregistrée, la recherche d'activité, une sauvegarde et les bilans. Les actions sont pilotées par un scénario dans une copie de tournage isolée, avec des données fictives ; ce n'est pas un enregistrement d'une partie de Dofus.
+
+Repères : **00:32** pour la saisie et l'enregistrement, **01:40** pour la recherche par classe et durée, **02:02** pour les sauvegardes, **02:36** pour les explications de sécurité. Les [12 captures commentées](docs/demo/README.md) et le [JSON de démonstration](docs/demo/mois-demo.json) permettent de retrouver les exemples dans l'application. Vous pouvez ainsi comprendre le parcours avant d'utiliser votre propre historique.
+
+</details>
+
+<details>
+<summary><strong>6. Que fait EvoFarm vis-à-vis de Dofus et d'Ankama ?</strong></summary>
+
+**EvoFarm traite les informations que vous saisissez dans sa propre fenêtre.** Le code applicatif de cette version n'implémente aucune lecture de la mémoire du jeu, interception du trafic, modification des fichiers de Dofus ou commande envoyée au client. Il ne clique pas à votre place, ne pilote ni combat ni déplacement et ne collecte pas automatiquement vos drops ou les prix. Il ne demande aucun identifiant, mot de passe ou code de connexion Ankama.
+
+La séparation est concrète : vous jouez dans Dofus ; EvoFarm sert à noter, calculer et comparer vos sessions. Les seules automatisations fonctionnelles d'EvoFarm concernent ses calculs, ses bilans et ses sauvegardes locales.
+
+Le projet est indépendant et ne revendique aucune validation officielle d'Ankama. Ankama [interdit notamment les outils d'automatisation des actions en jeu](https://support.ankama.com/hc/fr/articles/360015168678-Quels-comportements-hors-charte-%C3%A0-signaler-aupr%C3%A8s-du-Support). La description technique ci-dessus explique le périmètre d'EvoFarm ; elle ne constitue pas une autorisation d'Ankama ni une garantie contre une sanction. Pour une confirmation officielle concernant votre usage, consultez les règles du jeu et le support Ankama.
+
+</details>
 
 ## Télécharger et commencer
 
