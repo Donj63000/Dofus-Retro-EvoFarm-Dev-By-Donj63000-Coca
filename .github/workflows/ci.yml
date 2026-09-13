@@ -83,7 +83,7 @@ jobs:
         run: cargo audit --json > cargo-audit.json
       - name: Conserver les constats de dependances
         if: always() && matrix.platform == 'windows'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: security-audit-windows
           if-no-files-found: warn
@@ -142,7 +142,7 @@ jobs:
         run: |
           cargo build --release --locked --target x86_64-apple-darwin
           python scripts/smoke-app.py --binary target/x86_64-apple-darwin/release/evofarm --check-macos
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: matrix.platform == 'windows'
         with:
           name: EvoFarm-Windows-x64
@@ -152,7 +152,7 @@ jobs:
             EvoFarm.exe
             EvoFarm-Windows-x64.zip
             SHA256SUMS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: matrix.platform == 'linux'
         with:
           name: EvoFarm-Linux-x64
@@ -161,7 +161,7 @@ jobs:
           path: |
             dist/EvoFarm-Linux-x64.tar.gz
             dist/SHA256SUMS-linux
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: matrix.platform == 'macos'
         with:
           name: EvoFarm-macOS-universal
@@ -190,7 +190,7 @@ jobs:
         run: |
           VERSION=$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
           python scripts/verify-release.py --distribution distribution --version "$VERSION" --assemble
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: EvoFarm-release
           if-no-files-found: error
